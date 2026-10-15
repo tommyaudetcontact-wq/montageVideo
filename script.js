@@ -1,4 +1,5 @@
 const PIXELS_PER_SECOND = 40;
+const pendingMediaImports=new Set();
 
 let state = {
   mediaFiles: [], 
@@ -218,6 +219,7 @@ function renderCanvasFrame() {
     }
   });
   clipPlayers.forEach(v=>{if(!usedPlayers.has(v))v.pause();});
+  window.CropTools?.refresh();
 }
 
 // LECTURE SANS PERTE DE SYNCHRO
@@ -354,12 +356,12 @@ if (btnDuplicatePipAi) {
       ...fullHeightPose(activeClip.baseWidth,activeClip.baseHeight),
       keyframes: [], autoZoom: null, popUp: null, groupId: null,
       animationStart: null, animationDuration: null,
-      crop: { top: 0, bottom: 0, left: 0, right: 0 }
+      crop: { top: 0, bottom: 0, left: 0, right: 0 }, cropRatio:'free'
     };
 
     state.timeline.push(newPip);
     state.activeClipId = newPip.id;
-    recalculateTimelinePositions();
+
     pushState();
     renderTimeline();
     renderCanvasFrame();
@@ -622,72 +624,10 @@ if (snapToggleBtn) {
 
 function findNearestSpeechSnapPoint(bounds, targetTime, thresholdSeconds = 0.40) {
   if (!state.isSnapping || !bounds) return null;
-  for (const seg of bounds) {
-    if (Math.abs(targetTime - seg.start) <= thresholdSeconds) return { snappedTime: seg.start };
-    if (Math.abs(targetTime - seg.end) <= thresholdSeconds) return { snappedTime: seg.end };
-  }
-  return null;
+  const closest=bounds.flatMap(seg=>[seg.start,seg.end]).filter(time=>Math.abs(targetTime-time)<=thresholdSeconds).sort((a,b)=>Math.abs(a-targetTime)-Math.abs(b-targetTime))[0];
+  return closest===undefined?null:{snappedTime:closest};
 }
 
-function setupTrimEvents() {
-  const handles = document.querySelectorAll('.trim-handle');
-  handles.forEach(handle => {
-    handle.addEventListener('pointerdown', (e) => {
-      e.stopPropagation();
-      const clipId = handle.dataset.clipId;
-      const side = handle.dataset.side;
-      const clip = state.timeline.find(c => c.id === clipId);
-      const media = state.mediaFiles.find(m => m.id === clip.mediaId);
-      const startX = e.clientX;
-      const initialStart = clip.startTime;
-      const initialEnd = clip.endTime;
-
-      const onPointerMove = (moveEvent) => {
-        const deltaX = moveEvent.clientX - startX;
-        const deltaTime = deltaX / PIXELS_PER_SECOND;
-        let isSnapped = false;
-
-        if (side === 'left') {
-          let newStart = Math.max(0, initialStart + deltaTime);
-          const snap = findNearestSpeechSnapPoint(media ? media.speechBounds : null, newStart);
-          if (snap) {
-            newStart = snap.snappedTime;
-            isSnapped = true;
-          }
-          if (initialEnd - newStart >= 0.2) clip.startTime = newStart;
-        } else {
-          let newEnd = Math.min(media?.duration || media?.element?.duration || 86400, initialEnd + deltaTime);
-          const snap = findNearestSpeechSnapPoint(media ? media.speechBounds : null, newEnd);
-          if (snap) {
-            newEnd = snap.snappedTime;
-            isSnapped = true;
-          }
-          if (newEnd - initialStart >= 0.2) clip.endTime = newEnd;
-        }
-
-        handle.classList.toggle('snapped', isSnapped);
-        recalculateTimelinePositions();
-        
-        const currentScroll = timelineScrollContainer ? timelineScrollContainer.scrollLeft : 0;
-        renderTimeline();
-        if (timelineScrollContainer) timelineScrollContainer.scrollLeft = currentScroll;
-      };
-
-      const onPointerUp = () => {
-        handle.classList.remove('snapped');
-        window.removeEventListener('pointermove', onPointerMove);
-        window.removeEventListener('pointerup', onPointerUp);
-        recalculateTimelinePositions();
-        pushState();
-        renderTimeline();
-        renderCanvasFrame();
-      };
-
-      window.addEventListener('pointermove', onPointerMove);
-      window.addEventListener('pointerup', onPointerUp);
-    });
-  });
-}
 
 function syncMediaStatus() {
   state.mediaFiles.forEach(m => {
@@ -702,6 +642,7 @@ if (videoInput) {
     if (files.length === 0) return;
 
     files.forEach((file) => {
+      const importToken={};pendingMediaImports.add(importToken);
       const id = 'vid_' + Math.random().toString(36).substr(2, 9);
       const url = URL.createObjectURL(file);
       const vid = document.createElement('video');
@@ -710,8 +651,9 @@ if (videoInput) {
 
       showToast(`Importation de ${file.name}...`);
 
-      vid.onerror = () => { URL.revokeObjectURL(url); showToast("Impossible de lire cette vidéo."); };
+      vid.onerror = () => { pendingMediaImports.delete(importToken);URL.revokeObjectURL(url); showToast("Impossible de lire cette vidéo."); };
       vid.onloadedmetadata = async () => {
+        try{
         let videoDuration=vid.duration;
         try {
           const B=await loadMediaLibrary();
@@ -752,7 +694,7 @@ if (videoInput) {
           type: 'video',
           startTime: 0,
           endTime: Number.isFinite(videoDuration) && videoDuration>0 ? videoDuration : 10,
-          timelineStart: 0,
+          timelineStart: primaryTrackEnd(),
           zIndex: 0,
           muted: false,
           aiBackgroundRemoval: false,
@@ -762,13 +704,14 @@ if (videoInput) {
         state.timeline.push(newClip);
         state.activeClipId = newClip.id;
 
-        recalculateTimelinePositions();
+    
         syncMediaStatus();
         renderMediaLibrary();
         renderTimeline();
         renderCanvasFrame();
         pushState();
         showToast("Vidéo ajoutée !");
+        }catch(e){showToast("Importation : "+e.message);}finally{pendingMediaImports.delete(importToken);}
       };
     });
   });
@@ -780,12 +723,15 @@ if (imagePipInput) {
     if (!file) return;
     e.target.value='';
 
+    const importToken={};pendingMediaImports.add(importToken);
     const id = 'img_' + Math.random().toString(36).substr(2, 9);
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.src = url;
 
+    img.onerror=()=>{pendingMediaImports.delete(importToken);URL.revokeObjectURL(url);showToast("Image illisible.");};
     img.onload = () => {
+      pendingMediaImports.delete(importToken);
       state.mediaFiles.push({ id, file, url, element: img, type: 'image', used: true });
       const maxZ = Math.max(0, ...state.timeline.map(c => c.zIndex || 0));
 
@@ -803,7 +749,7 @@ if (imagePipInput) {
 
       state.timeline.push(newClip);
       state.activeClipId = newClip.id;
-      recalculateTimelinePositions();
+  
       pushState();
       renderTimeline();
       renderCanvasFrame();
@@ -872,7 +818,7 @@ function addMediaToTimeline(mediaId) {
     type: media.type,
     startTime: 0,
     endTime: fullDuration,
-    timelineStart: media.type === 'image' ? state.currentTime : 0,
+    timelineStart: media.type === 'image' ? state.currentTime : primaryTrackEnd(),
     zIndex: media.type === 'image' ? Math.max(0,...state.timeline.map(c=>c.zIndex))+1 : 0,
     muted: false,
     ...fullHeightPose(media.element.videoWidth || media.element.naturalWidth,media.element.videoHeight || media.element.naturalHeight)
@@ -881,7 +827,7 @@ function addMediaToTimeline(mediaId) {
   state.timeline.push(newClip);
   state.activeClipId = newClip.id;
   
-  recalculateTimelinePositions();
+
   syncMediaStatus();
   renderMediaLibrary();
   renderTimeline();
@@ -1094,3 +1040,5 @@ function fitMedia(w,h,maxW=workspaceWidth(),maxH=workspaceHeight()) {
 }
 
 new ResizeObserver(updateTimelinePaddings).observe(timelineScrollContainer);
+
+function primaryTrackEnd(){return Math.max(0,...state.timeline.filter(c=>(c.zIndex||0)===0).map(c=>(c.timelineStart||0)+c.endTime-c.startTime));}

@@ -23,3 +23,15 @@ Sources des tests reproductibles conservées dans le dossier work de l’espace 
 - Trois outils portent le badge +. Inspection visuelle de la palette et de la disposition sur mobile. Aucune erreur JavaScript dans le scénario de vérification.
 
 Le contrôle des doigts utilise des PointerEvents synthétiques dans le navigateur de bureau ; aucun téléphone physique n’a été testé. La détection alpha utilise un masque déterministe pour vérifier la sélection, distinct de l’évaluation de qualité du modèle IA. Le stockage dépend du navigateur et de son quota ; les masques IA ne sont pas persistés.
+
+
+## Version 17 · vérifications complémentaires
+
+- Rognage : huit poignées, déplacement du cadre, ratio verrouillé, réinitialisation, conservation de la pose et préréglage adapté entre image et vidéo de ratios différents.
+- Aimantation : deux poignées, extrémités d’autres clips, curseur, guide, Annuler/Rétablir, Aimant désactivé et suspension Alt. Tests des limites du média et des images extensibles.
+- Export réel puis redécodage MP4 : définition conservée, centre présent, côtés rognés absents. Rognage et préréglage retrouvés après rechargement.
+- Migration d’une base version 1 : médias et historique Rétablir conservés. Deux projets nommés, retours entre projets, historiques indépendants, renommage et restauration du projet actif.
+- Fermeture explicite de la connexion IndexedDB reproduite : sauvegarde suivante réussit par réouverture automatique.
+- Chargement IA depuis assets/ai, inférence réelle et relance via Réessayer IA réussis. Profil navigateur Android simulé : un seul moteur IA.
+- Aucun téléphone Android physique testé : ces contrôles valident les mécanismes corrigés, pas tous les navigateurs ou toutes les limites mémoire des téléphones.
+- Les ressources incluses sont épinglées à MediaPipe Tasks Vision 0.10.21. Sources, tailles et empreintes SHA-256 dans assets/ai/SOURCES.json ; licence jointe.

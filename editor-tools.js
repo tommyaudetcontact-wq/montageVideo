@@ -19,7 +19,7 @@ function hitTestLayer(point){
  const visible=state.timeline.map((clip,index)=>({clip,index})).filter(({clip:c})=>time>=(c.timelineStart||0)&&time<(c.timelineStart||0)+c.endTime-c.startTime).sort((a,b)=>(b.clip.zIndex||0)-(a.clip.zIndex||0)||b.index-a.index);
  for(const {clip} of visible){
    const drawn=renderedLayer(clip,time);if((drawn.opacity??1)<.05)continue;
-   const {u,v}=layerLocalPoint(drawn,point),crop=clip.crop||{};
+   const {u,v}=layerLocalPoint(drawn,point),crop=normalizeCrop(clip.crop);
    if(u<(crop.left||0)/100||u>1-(crop.right||0)/100||v<(crop.top||0)/100||v>1-(crop.bottom||0)/100)continue;
    const media=state.mediaFiles.find(m=>m.id===clip.mediaId);if(!media)continue;
    if(clip.aiBackgroundRemoval){
@@ -51,7 +51,7 @@ window.retainGestureLayer=(previousId,points)=>{
  if(!above||time<(previous.timelineStart||0)||time>=(previous.timelineStart||0)+previous.endTime-previous.startTime)return false;
  const drawn=renderedLayer(previous,time);if((drawn.opacity??1)<.05)return false;
  const middle={x:points.reduce((n,p)=>n+p.x,0)/points.length,y:points.reduce((n,p)=>n+p.y,0)/points.length};
- const contains=point=>{const {u,v}=layerLocalPoint(drawn,point),crop=previous.crop||{};return u>=(crop.left||0)/100&&u<=1-(crop.right||0)/100&&v>=(crop.top||0)/100&&v<=1-(crop.bottom||0)/100;};
+ const contains=point=>{const {u,v}=layerLocalPoint(drawn,point),crop=normalizeCrop(previous.crop);return u>=(crop.left||0)/100&&u<=1-(crop.right||0)/100&&v>=(crop.top||0)/100&&v<=1-(crop.bottom||0)/100;};
  if(![...points,middle].some(contains))return false;
  state.activeClipId=previous.id;state.editPoseClipId=null;greenScreenProcessor.updateSlidersUI(previous);renderTimeline();window.revealSelectedLayer();renderCanvasFrame();return true;
 };
@@ -116,11 +116,11 @@ function makeClipPreset(clip,name){
    keys=[{time:0,...normalizedPresetPose(clip,manualPose(clip,start))},...clip.keyframes.filter(k=>k.time+range.start>start+1e-6&&k.time+range.start<start+duration-1e-6).map(k=>({time:(k.time+range.start-start)/duration,...normalizedPresetPose(clip,k)})),{time:1,...normalizedPresetPose(clip,manualPose(clip,start+duration))}];
  }
  const group=clip.groupId&&state.groups[clip.groupId];
- return {id:globalThis.crypto?.randomUUID?.()||'preset_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2),version:1,name:name.trim(),createdAt:Date.now(),pose:normalizedPresetPose(clip,layerPose(clip)),keyframes:keys,crop:structuredClone(clip.crop||{}),autoZoom:structuredClone(group?.autoZoom||clip.autoZoom||{enabled:false,percent:15}),popUp:{enabled:!!clip.popUp?.enabled,fraction:Math.min(clip.popUp?.duration||.25,duration/2)/duration},aiBackgroundRemoval:!!clip.aiBackgroundRemoval,volume:clip.volume??1,muted:!!clip.muted,audioOffset:clip.audioOffset||0};
+ return {id:globalThis.crypto?.randomUUID?.()||'preset_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2),version:1,name:name.trim(),createdAt:Date.now(),pose:normalizedPresetPose(clip,layerPose(clip)),keyframes:keys,crop:normalizeCrop(clip.crop),cropRatio:clip.cropRatio||'free',autoZoom:structuredClone(group?.autoZoom||clip.autoZoom||{enabled:false,percent:15}),popUp:{enabled:!!clip.popUp?.enabled,fraction:Math.min(clip.popUp?.duration||.25,duration/2)/duration},aiBackgroundRemoval:!!clip.aiBackgroundRemoval,volume:clip.volume??1,muted:!!clip.muted,audioOffset:clip.audioOffset||0};
 }
 function applyClipPreset(preset,clip,span={start:clip.timelineStart||0,duration:clip.endTime-clip.startTime}){
  const pose=p=>({centerX:p.centerX*workspaceWidth(),centerY:p.centerY*workspaceHeight(),scale:p.height*workspaceHeight()/clip.baseHeight,rotation:p.rotation});
- applyPose(clip,pose(preset.pose));clip.crop=structuredClone(preset.crop);clip.keyframes=preset.keyframes.map(k=>({time:k.time*span.duration,...pose(k)}));
+ applyPose(clip,pose(preset.pose));clip.cropRatio=preset.cropRatio||'free';clip.crop=fitCropRatio(preset.crop,clip.cropRatio,clip.baseWidth/clip.baseHeight);clip.keyframes=preset.keyframes.map(k=>({time:k.time*span.duration,...pose(k)}));
  clip.animationStart=span.start;clip.animationDuration=span.duration;
  clip.autoZoom=structuredClone(preset.autoZoom);clip.popUp={enabled:preset.popUp.enabled,duration:Math.max(.05,preset.popUp.fraction*span.duration)};
  clip.aiBackgroundRemoval=clip.type==='video'&&preset.aiBackgroundRemoval;clip.volume=preset.volume;clip.muted=preset.muted;clip.audioOffset=preset.audioOffset;

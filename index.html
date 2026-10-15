@@ -11,7 +11,7 @@
   <!-- Bootstrap Icons -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   
-  <link rel="stylesheet" href="studio.css?v=15">
+  <link rel="stylesheet" href="studio.css?v=17">
 </head>
 <body class="vh-100 d-flex flex-column justify-content-between p-2 p-md-3">
 
@@ -29,7 +29,7 @@
       </div>
       
       <div class="d-flex gap-2">
-        <button id="workspace-btn" class="btn">Format 9:16</button><button id="quality-btn" class="btn">Qualité</button><button id="snap-toggle-btn" class="btn btn-info btn-sm rounded-pill px-2 fw-semibold" title="Aimantation Vocale">
+        <button id="projects-btn" class="btn">▤ Projets</button><button id="workspace-btn" class="btn">Format 9:16</button><button id="quality-btn" class="btn">Qualité</button><button id="snap-toggle-btn" class="btn btn-info btn-sm rounded-pill px-2 fw-semibold" title="Aimantation Vocale">
           <i class="bi bi-magnet-fill me-1"></i> Aimant
         </button>
         <button id="export-btn" class="btn btn-primary btn-sm rounded-pill px-3 fw-bold">
@@ -66,18 +66,11 @@
         <label class="form-label m-0">Rotation (°)</label>
         <input type="range" id="slider-pip-rotation" class="form-range form-range-sm" min="-180" max="180" value="0">
       </div>
-      <div class="col-6">
-        <label class="form-label m-0">Rognage Haut (%)</label>
-        <input type="range" id="slider-crop-top" class="form-range form-range-sm" min="0" max="80" value="0">
-      </div>
-      <div class="col-6">
-        <label class="form-label m-0">Rognage Bas (%)</label>
-        <input type="range" id="slider-crop-bottom" class="form-range form-range-sm" min="0" max="80" value="0">
-      </div>
+
     </div>
   </div>
 
-  <div class="ai-strip"><span id="ai-status" role="status">Chargement du moteur IA…</span><span id="autosave-status" role="status">Sauvegarde locale…</span></div>
+  <div class="ai-strip"><span id="ai-status" role="status">Chargement du moteur IA…</span><button id="retry-ai" class="btn" type="button" hidden>Réessayer IA</button><span id="autosave-status" role="status">Sauvegarde locale…</span></div>
   <details class="ai-settings" hidden><summary>Affiner le détourage</summary><div class="ai-options"><label>Contour <input id="ai-threshold" type="range" min="0.2" max="0.8" step="0.01" value="0.5"></label><label>Qualité<select id="ai-quality"><option value="balanced">Contours affinés</option><option value="fine">Contours fins (plus lent)</option><option value="fast">Rapide</option></select></label><label>Douceur <input id="ai-softness" type="range" min="0.02" max="0.25" step="0.01" value="0.12"></label><p>Déplacez le calque avec un doigt. Pincez avec deux doigts pour le redimensionner.</p></div></details>
   <div id="precache-progress" hidden role="status"><span id="precache-status">Préparation du détourage…</span><progress id="precache-meter" max="1" value="0"></progress><button id="cancel-precache" type="button">Annuler</button></div>
   <div id="export-progress" hidden role="status"><span id="export-status"></span><progress id="export-meter" max="1" value="0"></progress><button id="cancel-export" type="button">Annuler</button></div>
@@ -96,7 +89,7 @@
     <div class="transport"><button id="play-btn" class="btn"><i id="play-icon" class="bi bi-play-fill"></i> <span id="play-text">Lire</span></button><span id="timecode-display">00:00.0 / 00:00.0</span><span class="hold-hint">Maintenir un outil pour ses réglages</span></div>
     <div class="tool-row primary-tools">
       <button id="btn-duplicate-pip-ai" class="btn">▣ PIP IA</button>
-      <button id="toggle-ai" class="btn">✂ Détourer</button>
+      <button id="crop-btn" class="btn">▣ Rogner</button><button id="toggle-ai" class="btn">✂ Détourer</button>
       <button id="btn-animations" class="btn">✦ Animation</button>
       <button id="volume-btn" class="btn">◖ Volume</button>
       <button id="btn-mute" class="btn">Mute</button>
@@ -112,7 +105,7 @@
   </div>
   <!-- TIMELINE STYLE INSHOT (CALQUES EMPILÉS) -->
   <div class="timeline-viewport mb-2" id="timeline-viewport">
-    <div class="playhead-line"></div>
+    <div class="playhead-line"></div><div id="timeline-snap-guide" hidden><span></span></div>
     
     <div class="timeline-scroll-container" id="timeline-scroll-container">
       <div class="timeline-track" id="timeline-track">
@@ -150,18 +143,18 @@
   <div id="workspace-settings" hidden><label>Format de travail<select id="workspace-format"><option value="9:16">Vertical · 9:16</option><option value="16:9">Paysage · 16:9</option><option value="1:1">Carré · 1:1</option><option value="4:5">Portrait · 4:5</option></select></label></div>
   <button id="prepare-cutout" hidden></button>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="mask-refine.js?v=15"></script>
-  <script src="segment-worker.js?v=15"></script>
-  <script src="animations.js?v=15"></script>
-  <script src="mask-pool.js?v=15"></script>
-  <script src="mask-cache.js?v=15"></script>
-  <script src="greenscreen.js?v=15"></script>
-  <script src="export.js?v=15"></script>
-  <script src="script.js?v=15"></script>
-  <script src="studio.js?v=15"></script>
-<div id="preset-settings" hidden><p>Enregistrez la pose, le rognage, les animations, le volume et le décalage du calque sélectionné. Les temps des keyframes et des animations s’adaptent à la durée du prochain clip.</p><label>Nom du préréglage<input id="preset-name" type="text" maxlength="80" placeholder="Mon zoom portrait"></label><button id="save-preset" class="btn">Enregistrer le calque actuel</button><label>Mes préréglages<select id="preset-list"></select></label><div class="animation-row"><button id="apply-preset" class="btn">Appliquer au calque</button><button id="rename-preset" class="btn">Renommer</button></div><p id="preset-status" role="status"></p></div>
+  <script src="mask-refine.js?v=17"></script>
+  <script src="segment-worker.js?v=17"></script>
+  <script src="animations.js?v=17"></script><script src="crop-tools.js?v=17"></script><script src="timeline-trim.js?v=17"></script>
+  <script src="mask-pool.js?v=17"></script>
+  <script src="mask-cache.js?v=17"></script>
+  <script src="greenscreen.js?v=17"></script>
+  <script src="export.js?v=17"></script>
+  <script src="script.js?v=17"></script>
+  <script src="studio.js?v=17"></script>
+<section id="project-settings" hidden><p id="current-project-name"></p><label>Nom du projet<input id="project-name" type="text" maxlength="80" placeholder="Mon prochain montage"></label><div class="animation-row"><button id="new-project" class="btn">＋ Nouveau montage</button><button id="rename-project" class="btn">Renommer le projet ouvert</button></div><p id="project-status" role="status"></p><div id="project-list"></div><p>Chaque projet garde ses médias et son propre historique. Les préréglages restent communs à tous vos projets sur ce navigateur.</p></section><section id="crop-settings" hidden><p>Glissez les bords ou les coins pour rogner. Glissez au milieu pour déplacer le cadre. L’image source est affichée sans sa rotation pour faciliter le réglage.</p><div id="crop-preview"><div id="crop-surface"><canvas id="crop-canvas"></canvas><svg viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true"><path id="crop-shade" fill-rule="evenodd"/></svg><div id="crop-box"><i></i><i></i></div></div></div><div class="animation-row"><label>Proportions<select id="crop-ratio"><option value="free">Libre</option><option value="original">Originales</option><option value="1:1">Carré · 1:1</option><option value="9:16">Vertical · 9:16</option><option value="16:9">Paysage · 16:9</option><option value="4:5">Portrait · 4:5</option></select></label><button id="crop-reset" class="btn">Réinitialiser</button></div><div id="crop-controls"></div><p id="crop-size" role="status"></p><p>Rognage non destructif : position, zoom et rotation restent conservés. Les préréglages mémorisent aussi ces proportions.</p></section><div id="preset-settings" hidden><p>Enregistrez la pose, le rognage, les animations, le volume et le décalage du calque sélectionné. Les temps des keyframes et des animations s’adaptent à la durée du prochain clip.</p><label>Nom du préréglage<input id="preset-name" type="text" maxlength="80" placeholder="Mon zoom portrait"></label><button id="save-preset" class="btn">Enregistrer le calque actuel</button><label>Mes préréglages<select id="preset-list"></select></label><div class="animation-row"><button id="apply-preset" class="btn">Appliquer au calque</button><button id="rename-preset" class="btn">Renommer</button></div><p id="preset-status" role="status"></p></div>
 <div id="session-loading" role="status">Ouverture du projet local…</div>
-<script src="blades.js?v=15"></script><script src="editor-tools.js?v=15"></script><script src="session.js?v=15"></script></body>
+<script src="blades.js?v=17"></script><script src="editor-tools.js?v=17"></script><script src="local-db.js?v=17"></script><script src="session.js?v=17"></script><script src="projects.js?v=17"></script></body>
 </html>
 
 

@@ -13,6 +13,7 @@ class GreenScreenProcessor {
   }
   status(message) {
     const el=document.getElementById('ai-status'); if(el && el.textContent!==message) el.textContent=message;
+    const retry=document.getElementById('retry-ai');if(retry)retry.hidden=!this.failure;
   }
   async init() {
     if (location.protocol === 'file:') {
@@ -21,20 +22,21 @@ class GreenScreenProcessor {
       try { this.worker = new Worker(workerURL); }
       finally { URL.revokeObjectURL(workerURL); }
     } else {
-      this.worker=new Worker('segment-worker.js?v=14');
+      this.worker=new Worker('segment-worker.js?v=17');
     }
     this.jobs=new Map(); this.serial=0;
     await new Promise((resolve,reject)=>{
-      const timer=setTimeout(()=>reject(new Error('Chargement IA trop long. Rechargez la page.')),60000);
+      const timer=setTimeout(()=>reject(new Error('Chargement IA trop long. Réessayez le chargement.')),120000);
       this.worker.onerror=()=>{clearTimeout(timer); const message=location.protocol==='file:' ? 'Ouverture directe bloquée par ce navigateur : ouvrez la version GitHub Pages en HTTPS. Internet est nécessaire pour les CDN.' : 'Impossible de charger le moteur IA. Vérifiez la connexion aux CDN.'; this.failure=new Error(message); this.isReady=false; this.status(message); reject(this.failure); this.jobs.forEach(j=>j.reject(this.failure)); this.jobs.clear();};
       this.worker.onmessage=({data})=>{
-        if(data.type==='ready') {clearTimeout(timer); resolve();}
+        if(data.type==='progress')this.status(data.message);
+        else if(data.type==='ready') {clearTimeout(timer);this.aiSource=data.source; resolve();}
         else if(data.type==='error') {const job=this.jobs.get(data.id); if(job){this.jobs.delete(data.id); job.reject(new Error(data.message));} else {clearTimeout(timer); reject(new Error(data.message));}}
         else {const job=this.jobs.get(data.id); if(job){this.jobs.delete(data.id); job.resolve(data);}}
       };
-      this.worker.postMessage({type:'init',refinerURL:new URL('mask-refine.js?v=6',location.href).href});
+      this.worker.postMessage({type:'init',refinerURL:new URL('mask-refine.js?v=17',location.href).href,assetBase:new URL('assets/ai/',location.href).href});
     });
-    this.isReady=true; this.status('IA prête · traitement sur cet appareil');
+    this.isReady=true; this.failure=null;this.status('IA prête · ressources '+(this.aiSource||'CDN')+' · traitement sur cet appareil');
   }
   prepareFrame(video, clip, options = {}) {
     const task=this.queue.catch(()=>{}).then(async()=>{
@@ -128,7 +130,7 @@ class GreenScreenProcessor {
     const drawX = -width / 2;
     const drawY = -height / 2;
 
-    const crop=clip.crop || {};
+    const crop=normalizeCrop(clip.crop);
     const left=(crop.left||0)/100*width, top=(crop.top||0)/100*height;
     const cw=Math.max(0,width-left-(crop.right||0)/100*width);
     const ch=Math.max(0,height-top-(crop.bottom||0)/100*height);
@@ -198,8 +200,8 @@ class GreenScreenProcessor {
     if (sliderY) {sliderY.min=Math.min(-1280,Math.floor((clip.y||0)-1280));sliderY.max=Math.max(2560,Math.ceil((clip.y||0)+1280));sliderY.value=clip.y||0;}
     if (sliderScale) sliderScale.value = clip.scale || 1.0;
     if (sliderRotation) sliderRotation.value = clip.rotation || 0;
-    const top=document.getElementById('slider-crop-top'),bottom=document.getElementById('slider-crop-bottom');
-    if(top)top.value=clip.crop?.top||0;if(bottom)bottom.value=clip.crop?.bottom||0;
+    const crop=normalizeCrop(clip.crop);
+    for(const side of ['top','bottom','left','right']){const input=document.getElementById('slider-crop-'+side);if(input&&input!==document.activeElement)input.value=crop[side];}
   }
 
   bindSliders(getActiveClipFn, renderCallback) {
@@ -207,8 +209,7 @@ class GreenScreenProcessor {
     const sliderY = document.getElementById('slider-pip-y');
     const sliderScale = document.getElementById('slider-pip-scale');
     const sliderRotation = document.getElementById('slider-pip-rotation');
-    const sliderCropTop = document.getElementById('slider-crop-top');
-    const sliderCropBottom = document.getElementById('slider-crop-bottom');
+
 
     const onChange = () => {
       const clip = getActiveClipFn();
@@ -227,16 +228,14 @@ class GreenScreenProcessor {
       }
       if (sliderRotation) clip.rotation = parseFloat(sliderRotation.value);
 
-      if (!clip.crop) clip.crop = { top: 0, bottom: 0, left: 0, right: 0 };
-      if (sliderCropTop) clip.crop.top = parseFloat(sliderCropTop.value);
-      if (sliderCropBottom) clip.crop.bottom = parseFloat(sliderCropBottom.value);
+
 
       updateKeyframeFromEdit(clip);
       this.updateSlidersUI(clip);
       renderCallback();
     };
 
-    [sliderX, sliderY, sliderScale, sliderRotation, sliderCropTop, sliderCropBottom].forEach(el => {
+    [sliderX, sliderY, sliderScale, sliderRotation].forEach(el => {
       if (el) { el.addEventListener('input', onChange); el.addEventListener('change', () => { if(typeof pushState==='function'){pushState();renderTimeline();if(window.refreshAnimationPanel)refreshAnimationPanel();} }); }
     });
   }

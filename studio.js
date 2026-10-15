@@ -23,3 +23,15 @@ const definitionObserver=new MutationObserver(()=>{
   document.getElementById('source-definition').textContent=m ? `· ${m.element.videoWidth} × ${m.element.videoHeight}` : '· définition source';
 });
 definitionObserver.observe(document.getElementById('timeline-track'),{childList:true});
+
+document.getElementById('retry-ai').onclick=async()=>{
+ const button=document.getElementById('retry-ai');button.disabled=true;
+ try{
+  clearCutoutCache();const interrupted=new Error('Moteur IA relancé.');
+  for(const job of greenScreenProcessor.jobs?.values()||[])job.reject(interrupted);greenScreenProcessor.jobs?.clear();greenScreenProcessor.worker?.terminate();
+  for(const slot of cutoutWorkerPool.slots)if(!slot.shared){for(const job of slot.jobs.values())job.reject(interrupted);slot.jobs.clear();slot.worker.terminate();}cutoutWorkerPool.slots=[];cutoutWorkerPool.ready=null;
+  greenScreenProcessor.failure=null;greenScreenProcessor.isReady=false;
+  greenScreenProcessor.ready=greenScreenProcessor.init();greenScreenProcessor.ready.catch(e=>{greenScreenProcessor.failure=e;greenScreenProcessor.status('IA indisponible : '+e.message);});
+  await greenScreenProcessor.ready;scheduleCutoutPreload();
+ }catch(e){showToast(e.message);}finally{button.disabled=false;}
+};

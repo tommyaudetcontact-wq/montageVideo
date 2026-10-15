@@ -1,14 +1,26 @@
-# PocketCut · Mauve, orange et sauvegarde locale
+# PocketCut · Projets, rognage et Android
 
 Déposez tous les fichiers de ce dossier ensemble à la racine de votre site GitHub Pages. Aucun build, serveur applicatif, Python, compte ou clé API n’est nécessaire. Ouvrez l’adresse HTTPS de GitHub Pages. Vous pouvez aussi ouvrir index.html directement si votre navigateur autorise les CDN et les workers Blob depuis file://.
 
-Les bibliothèques et le modèle IA sont téléchargés depuis leurs CDN : Internet est nécessaire. Les fichiers importés, l’analyse, le montage et l’export restent dans votre navigateur. Il n’y a aucun téléversement de vos vidéos. Le projet, ses médias et son historique sont sauvegardés localement dans IndexedDB. Les masques de détourage restent en mémoire : ils sont recalculés après réouverture.
+Le moteur IA et son modèle sont inclus dans assets/ai et chargés depuis votre site ; des CDN servent de secours. Les autres bibliothèques utilisent encore leurs CDN : Internet est nécessaire. Les fichiers importés, l’analyse, le montage et l’export restent dans votre navigateur. Il n’y a aucun téléversement de vos vidéos. Le projet, ses médias et son historique sont sauvegardés localement dans IndexedDB. Les masques de détourage restent en mémoire : ils sont recalculés après réouverture.
+
+## Nouveautés version 17
+
+**Projets** ouvre votre bibliothèque : donnez un nom, créez un nouveau montage ou revenez à un autre. Chaque projet conserve ses médias, réglages et son propre historique Annuler/Rétablir, même après rechargement. Les préréglages sont communs aux projets. L’ancien montage est migré sous « Mon premier montage ». Un changement de projet attend la sauvegarde du montage ouvert ; si elle échoue, le changement est interrompu.
+
+**Rogner** ouvre un aperçu de la source avec huit poignées et un cadre déplaçable. Choisissez Libre, Original, Carré, Vertical 9:16, Paysage 16:9 ou Portrait 4:5. Les quatre côtés se règlent aussi numériquement. Réinitialiser récupère l’image entière. Le rognage est non destructif et conserve la pose, la rotation et les animations ; il est inclus dans les préréglages et l’export. Un ratio fixe est adapté aux dimensions du prochain média. L’aperçu de rognage présente la source sans sa rotation pour faciliter les réglages.
+
+**Étirer/rétrécir un clip** : avec Aimant, ses poignées accrochent les extrémités des autres calques, le curseur et le début du montage. Un guide doré indique la cible. Alt suspend l’aimant sur ordinateur. Les limites du média et les clips voisins de la même rangée sont respectés. Le réglage manuel ne déplace pas automatiquement les autres clips.
+
+**Android** : les transactions rouvrent automatiquement une connexion IndexedDB fermée et réessaient jusqu’à trois fois. Le moteur IA utilise un seul worker sur mobile pour réduire la mémoire utilisée ; « Réessayer IA » permet de relancer son chargement après une erreur. Le moteur, ses deux variantes WASM et le modèle sont fournis dans **assets/ai** : téléversez impérativement ce dossier avec tous les fichiers, sans changer leur organisation. L’archive est donc plus volumineuse. Aucun serveur applicatif n’est nécessaire.
+
+La sauvegarde reste propre à chaque appareil, navigateur et adresse du site. Elle n’est pas synchronisée par GitHub. Conservez la même adresse pour retrouver vos projets. Ne videz pas les données du site pour appliquer cette mise à jour.
 
 ## Commandes
 
 Sélectionnez un clip sur la timeline ou touchez directement son sujet dans l’aperçu avant d’utiliser un outil. Les deux rangées défilent horizontalement sur petit écran.
 
-- **PIP IA** : crée une copie détourée centrée à pleine hauteur, son coupé. Maintenez 450 ms pour ouvrir position X/Y, zoom, rotation et rognage. Deux doigts permettent aussi de zoomer et tourner dans l’aperçu.
+- **PIP IA** : crée une copie détourée centrée à pleine hauteur, son coupé. Maintenez 450 ms pour ouvrir position X/Y, zoom et rotation. Deux doigts permettent aussi de zoomer et tourner dans l’aperçu.
 - **Détourer** : active/désactive immédiatement le détourage du clip sélectionné. Maintenez pour modifier Contour, Douceur et Qualité.
 - **Animation** : applique immédiatement le pop-up de 0,25 s au clip détouré sélectionné. Maintenez pour changer sa durée, désactiver ou tester l’effet. L’entrée et la sortie suivent la rotation du calque. Le sujet commence hors de la scène, grandit jusqu’à votre pose, puis rétrécit en sortant. Les clips courts adaptent la durée.
 - **Volume** : réglage immédiat de 0 à 400 % avec le curseur, jusqu’à 1000 % avec la valeur numérique. Un signal déjà fort peut saturer après amplification.

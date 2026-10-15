@@ -52,7 +52,7 @@ document.addEventListener('DOMContentLoaded',()=>{
    if(active())greenScreenProcessor.updateSlidersUI(active());refreshAnimationPanel();if(!dialog.open)dialog.showModal();
  }
  window.openPocketCutTool=open;
- byId('close-tool').onclick=()=>dialog.close();dialog.addEventListener('close',()=>{restore();state.editPoseClipId=null;renderCanvasFrame();});
+ byId('close-tool').onclick=()=>dialog.close();dialog.addEventListener('close',()=>{if(dialog.open)return;restore();state.editPoseClipId=null;renderCanvasFrame();});
  dialog.addEventListener('click',e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();}});
  const animation=byId('animation-panel'),body=animation.querySelector('.animation-body');
  const autoField=byId('autozoom-percent').closest('fieldset'),popField=byId('popup-duration').closest('fieldset'),fusionField=byId('merge-list').closest('fieldset');

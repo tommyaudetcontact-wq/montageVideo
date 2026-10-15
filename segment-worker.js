@@ -7,14 +7,25 @@ self.onmessage = async ({data}) => {
     if(data.type==='init') {
       initialized=(async()=>{
         if(typeof refineMaskAlpha==='undefined') importScripts(data.refinerURL);
-        const {FilesetResolver,ImageSegmenter}=await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/vision_bundle.mjs');
-        const files=await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/wasm');
-        segmenter=await ImageSegmenter.createFromOptions(files,{
-          baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite',delegate:'CPU'},
-          runningMode:'IMAGE',outputConfidenceMasks:true,outputCategoryMask:false
-        });
+        const remoteModel='https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite';
+        const sources=[];
+        if(data.assetBase?.startsWith('http'))sources.push({name:'site',bundle:data.assetBase+'vision_bundle.mjs',wasm:data.assetBase+'wasm',model:data.assetBase+'selfie_segmenter.tflite'});
+        for(const host of ['https://cdn.jsdelivr.net/npm/','https://unpkg.com/'])sources.push({name:'CDN',bundle:host+'@mediapipe/tasks-vision@0.10.21/vision_bundle.mjs',wasm:host+'@mediapipe/tasks-vision@0.10.21/wasm',model:remoteModel});
+        let last;
+        for(const source of sources){
+          try{
+            self.postMessage({type:'progress',message:'Chargement IA · '+source.name});
+            const {FilesetResolver,ImageSegmenter}=await import(source.bundle);
+            const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);let bytes;
+            try{const response=await fetch(source.model,{signal:controller.signal});if(!response.ok)throw Error('Modèle HTTP '+response.status);bytes=new Uint8Array(await response.arrayBuffer());}finally{clearTimeout(timer);}
+            const files=await FilesetResolver.forVisionTasks(source.wasm);
+            segmenter=await ImageSegmenter.createFromOptions(files,{baseOptions:{modelAssetBuffer:bytes,delegate:'CPU'},runningMode:'IMAGE',outputConfidenceMasks:true,outputCategoryMask:false});
+            self.aiSource=source.name;return;
+          }catch(e){last=e;}
+        }
+        throw Error('Chargement IA impossible : '+(last?.message||'réseau')+'. Vérifiez le dossier assets/ai et la connexion.');
       })();
-      await initialized; self.postMessage({type:'ready'}); return;
+      await initialized; self.postMessage({type:'ready',source:self.aiSource}); return;
     }
     await initialized;
     const {bitmap,threshold,softness,id,refine}=data;
