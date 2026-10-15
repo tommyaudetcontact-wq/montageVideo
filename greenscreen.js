@@ -22,7 +22,7 @@ class GreenScreenProcessor {
       try { this.worker = new Worker(workerURL); }
       finally { URL.revokeObjectURL(workerURL); }
     } else {
-      this.worker=new Worker('segment-worker.js?v=17');
+      this.worker=new Worker('segment-worker.js?v=18');
     }
     this.jobs=new Map(); this.serial=0;
     await new Promise((resolve,reject)=>{
@@ -34,7 +34,7 @@ class GreenScreenProcessor {
         else if(data.type==='error') {const job=this.jobs.get(data.id); if(job){this.jobs.delete(data.id); job.reject(new Error(data.message));} else {clearTimeout(timer); reject(new Error(data.message));}}
         else {const job=this.jobs.get(data.id); if(job){this.jobs.delete(data.id); job.resolve(data);}}
       };
-      this.worker.postMessage({type:'init',refinerURL:new URL('mask-refine.js?v=17',location.href).href,assetBase:new URL('assets/ai/',location.href).href});
+      this.worker.postMessage({type:'init',refinerURL:new URL('mask-refine.js?v=18',location.href).href,assetBase:new URL('assets/ai/',location.href).href});
     });
     this.isReady=true; this.failure=null;this.status('IA prête · ressources '+(this.aiSource||'CDN')+' · traitement sur cet appareil');
   }

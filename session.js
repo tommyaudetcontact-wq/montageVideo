@@ -13,7 +13,7 @@ function makeWaveformData(buffer){
 }
 function projectCheckpoint(){
  const settings={};for(const id of PROJECT_SETTINGS)settings[id]=document.getElementById(id).value;
- return {version:1,id:currentProjectId,name:currentProjectName,savedAt:Date.now(),live:{timeline:structuredClone(state.timeline),groups:structuredClone(state.groups),activeClipId:state.activeClipId,projectWidth:workspaceWidth(),projectHeight:workspaceHeight()},currentTime:state.currentTime,isSnapping:state.isSnapping,historyStack:[...historyStack],historyIndex,settings,mediaIds:state.mediaFiles.map(m=>m.id)};
+ return {version:1,id:currentProjectId,name:currentProjectName,savedAt:Date.now(),live:{timeline:structuredClone(state.timeline),groups:structuredClone(state.groups),activeClipId:state.activeClipId,projectWidth:workspaceWidth(),projectHeight:workspaceHeight()},timelineZoom:PIXELS_PER_SECOND,currentTime:state.currentTime,isSnapping:state.isSnapping,historyStack:[...historyStack],historyIndex,settings,mediaIds:state.mediaFiles.map(m=>m.id)};
 }
 function saveLocalProject(){
  if(!localReady)return Promise.resolve(true);
@@ -23,25 +23,27 @@ function saveLocalProject(){
   try{
    while(localDirty){
      localDirty=false;const checkpoint=projectCheckpoint(),unwritten=state.mediaFiles.filter(m=>!localMediaWritten.has(m.id));localStatus('Enregistrement…');
-     const descriptors=unwritten.map(m=>({id:m.id,file:m.file,name:m.file.name,type:m.type,duration:m.duration,thumbnails:m.thumbnails||[],speechBounds:m.speechBounds||[],audioAbsent:!!m.audioAbsent,waveform:makeWaveformData(m.audioBuffer)}));
-     await localTransaction(['projects','media','meta'],'readwrite',tx=>{
-       for(const m of descriptors)tx.objectStore('media').put(m);
+     for(const m of unwritten){
+       await persistLocalMedia(m);
+       localMediaWritten.add(m.id);
+     }
+     await localTransaction(['projects','meta'],'readwrite',tx=>{
        tx.objectStore('projects').put(checkpoint,checkpoint.id);tx.objectStore('meta').put(checkpoint.id,'activeProject');
      });
-     for(const m of unwritten)localMediaWritten.add(m.id);lastSaveProblem=null;localStatus('✓ Sauvegardé · '+currentProjectName);
+     lastSaveProblem=null;localStatus('✓ Sauvegardé · '+currentProjectName);
    }return true;
   }catch(e){lastSaveProblem=e;localDirty=true;localStatus('⚠ Sauvegarde impossible');showToast(e.name==='QuotaExceededError'?'Stockage local plein : les dernières modifications ne sont pas sauvegardées.':'Sauvegarde locale : '+e.message);return false;}
   finally{localSaving=false;}
  })();return localSaveTask;
 }
 window.PocketCutSession={
- schedule(){if(!localReady)return;localDirty=true;clearTimeout(localTimer);localTimer=setTimeout(saveLocalProject,0);},
+ schedule(){if(!localReady)return;localDirty=true;clearTimeout(localTimer);localTimer=setTimeout(saveLocalProject,250);},
  remember(){if(!localReady)return;clearTimeout(localCursorTimer);localCursorTimer=setTimeout(saveLocalProject,700);},
  flush:saveLocalProject,
  get ready(){return localReady;},get saving(){return localSaving;}
 };
 async function restoreLocalMedia(record){
- const file=record.file instanceof File?record.file:new File([record.file],record.name,{type:record.file.type}),url=URL.createObjectURL(file);
+ const file=await readLocalMediaFile(record),url=URL.createObjectURL(file);
  const element=record.type==='image'?new Image():document.createElement('video');
  if(record.type==='video'){element.playsInline=true;element.preload='metadata';element.muted=true;}
  try{await new Promise((resolve,reject)=>{
@@ -53,13 +55,14 @@ async function restoreLocalMedia(record){
 }
 async function restoreProjectSnapshot(saved){
  if(saved.version!==1)throw Error('Version du projet local non prise en charge.');
- const records=await Promise.all(saved.mediaIds.map(id=>localRead('media',id)));if(records.some(r=>!r?.file))throw Error('Un média manque dans la sauvegarde locale.');
+ const records=await Promise.all(saved.mediaIds.map(id=>localRead('media',id)));if(records.some(r=>!r||(!r.file&&r.storage!=='binary-chunks-v1')))throw Error('Un média manque dans la sauvegarde locale.');
  const restored=await Promise.all(records.map(restoreLocalMedia));
  pausePlayback();clearTimeout(maskPreloadTimer);clearCutoutCache();
  for(const video of clipPlayers.values()){video.pause();video.removeAttribute('src');video.load();}clipPlayers.clear();
  for(const media of state.mediaFiles){media.element?.pause?.();URL.revokeObjectURL(media.url);}
  greenScreenProcessor.frames.clear();greenScreenProcessor.previewSurfaces.clear();
  state.mediaFiles=restored;localMediaWritten.clear();for(const m of restored)localMediaWritten.add(m.id);
+ PIXELS_PER_SECOND=timelineZoomValue(saved.timelineZoom||40);window.PocketCutTimeline?.refresh();
  currentProjectId=saved.id;currentProjectName=saved.name||'Mon montage';
  for(const [id,value] of Object.entries(saved.settings||{})){const el=document.getElementById(id);if(el)el.value=value;}
  historyStack=saved.historyStack;historyIndex=saved.historyIndex;state.currentTime=saved.currentTime||0;state.isSnapping=saved.isSnapping!==false;

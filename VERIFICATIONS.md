@@ -35,3 +35,13 @@ Le contrôle des doigts utilise des PointerEvents synthétiques dans le navigate
 - Chargement IA depuis assets/ai, inférence réelle et relance via Réessayer IA réussis. Profil navigateur Android simulé : un seul moteur IA.
 - Aucun téléphone Android physique testé : ces contrôles valident les mécanismes corrigés, pas tous les navigateurs ou toutes les limites mémoire des téléphones.
 - Les ressources incluses sont épinglées à MediaPipe Tasks Vision 0.10.21. Sources, tailles et empreintes SHA-256 dans assets/ai/SOURCES.json ; licence jointe.
+
+
+## Version 18
+
+- Trois fichiers binaires de plus de 2 Mio sauvegardés puis reconstruits ; comparaison de tous les octets réussie.
+- Écriture partiellement interrompue : aucun média incomplet publié ; reprise et relecture réussies. Média déjà enregistré : aucun bloc réécrit.
+- Import réel en une sélection de trois vidéos WebM générées pour le test : ordre conservé, sauvegarde puis rechargement des trois médias lisibles réussis.
+- Zoom −/+ avec conservation du temps, dézoom tactile simulé, déplacement poursuivi après relâchement et interruption de l’inertie.
+- Migration schema 2 vers 3 : projet actif conservé, ancien enregistrement current non dupliqué. Migration schema 1, retour entre projets, historiques et préréglages vérifiés.
+- Contrôles réalisés dans Chromium sur ordinateur, pas sur un appareil Android physique. La cause exacte sur le téléphone n’est pas confirmée ; l’écriture directe de File/Blob et les imports concurrents ont été supprimés des nouvelles sauvegardes.

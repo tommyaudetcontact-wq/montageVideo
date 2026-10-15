@@ -1,11 +1,12 @@
 'use strict';
 let localOpening=null;
 function openLocalDatabase(){return new Promise((resolve,reject)=>{
- const request=indexedDB.open('pocketcut-studio:'+new URL('.',location.href).pathname,2);
+ const request=indexedDB.open('pocketcut-studio:'+new URL('.',location.href).pathname,3);
  let settled=false;const timer=setTimeout(()=>{settled=true;reject(Error('Ouverture du stockage local bloquée. Fermez les autres onglets PocketCut puis réessayez.'));},30000);
- request.onupgradeneeded=()=>{
+ request.onupgradeneeded=event=>{
    const db=request.result,tx=request.transaction;
-   for(const name of ['projects','media','presets','meta'])if(!db.objectStoreNames.contains(name))db.createObjectStore(name,name==='media'||name==='presets'?{keyPath:'id'}:undefined);
+   for(const name of ['projects','media','presets','meta','mediaChunks'])if(!db.objectStoreNames.contains(name))db.createObjectStore(name,name==='media'||name==='presets'?{keyPath:'id'}:undefined);
+   if(event.oldVersion>=2)return;
    const legacy=tx.objectStore('projects').get('current');legacy.onsuccess=()=>{if(legacy.result&&!legacy.result.id){const id='project_migrated_'+Date.now().toString(36);tx.objectStore('projects').put({...legacy.result,id,name:'Mon premier montage'},id);tx.objectStore('meta').put(id,'activeProject');}};
  };
  request.onsuccess=()=>{

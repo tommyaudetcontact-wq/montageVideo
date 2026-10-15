@@ -1,4 +1,5 @@
-const PIXELS_PER_SECOND = 40;
+let PIXELS_PER_SECOND = 40;
+let videoImportQueue=Promise.resolve();
 const pendingMediaImports=new Set();
 
 let state = {
@@ -637,12 +638,17 @@ function syncMediaStatus() {
 
 if (videoInput) {
   videoInput.addEventListener('change', (e) => {
-    const files = Array.from(e.target.files);
+    const files = Array.from(e.target.files).sort((a,b)=>{
+      const dateA=Number.isFinite(a.lastModified)&&a.lastModified>0?a.lastModified:Infinity;
+      const dateB=Number.isFinite(b.lastModified)&&b.lastModified>0?b.lastModified:Infinity;
+      return dateA===dateB?0:dateA-dateB;
+    });
     e.target.value='';
     if (files.length === 0) return;
 
     files.forEach((file) => {
       const importToken={};pendingMediaImports.add(importToken);
+      videoImportQueue=videoImportQueue.then(()=>new Promise(resolveImport=>{
       const id = 'vid_' + Math.random().toString(36).substr(2, 9);
       const url = URL.createObjectURL(file);
       const vid = document.createElement('video');
@@ -651,7 +657,7 @@ if (videoInput) {
 
       showToast(`Importation de ${file.name}...`);
 
-      vid.onerror = () => { pendingMediaImports.delete(importToken);URL.revokeObjectURL(url); showToast("Impossible de lire cette vidéo."); };
+      vid.onerror = () => { pendingMediaImports.delete(importToken);URL.revokeObjectURL(url); showToast("Impossible de lire cette vidéo.");resolveImport(); };
       vid.onloadedmetadata = async () => {
         try{
         let videoDuration=vid.duration;
@@ -711,8 +717,9 @@ if (videoInput) {
         renderCanvasFrame();
         pushState();
         showToast("Vidéo ajoutée !");
-        }catch(e){showToast("Importation : "+e.message);}finally{pendingMediaImports.delete(importToken);}
+        }catch(e){showToast("Importation : "+e.message);}finally{pendingMediaImports.delete(importToken);await window.PocketCutSession?.flush();resolveImport();}
       };
+      })).catch(e=>{pendingMediaImports.delete(importToken);showToast("Importation : "+e.message);});
     });
   });
 }

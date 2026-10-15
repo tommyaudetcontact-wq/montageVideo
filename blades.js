@@ -129,10 +129,5 @@ document.addEventListener('DOMContentLoaded',()=>{
    let cursor=start;for(const c of clips){c.groupId=id;c.timelineStart=cursor;cursor+=c.endTime-c.startTime;}
    state.activeClipId=clips[0].id;cancelFusion();commit();showToast('Fusion terminée. Auto-keyframes couvre toute la capsule.');
  };
- // Desktop and touch drag to scroll, while preserving a stationary tap selection.
- let drag;window.timelineDragged=false;
- timelineScrollContainer.addEventListener('pointerdown',e=>{if(e.button!==0||e.target.closest('.trim-handle'))return;pausePlayback();window.timelineDragged=false;drag={id:e.pointerId,x:e.clientX,y:e.clientY,left:timelineScrollContainer.scrollLeft,top:timelineScrollContainer.scrollTop};});
- window.addEventListener('pointermove',e=>{if(!drag||e.pointerId!==drag.id)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(Math.hypot(dx,dy)>6)window.timelineDragged=true;
-   if(window.timelineDragged){e.preventDefault();timelineScrollContainer.scrollLeft=drag.left-dx;timelineScrollContainer.scrollTop=drag.top-dy;}},{passive:false});
- const endDrag=()=>{drag=null;setTimeout(()=>window.timelineDragged=false,0);};window.addEventListener('pointerup',endDrag);window.addEventListener('pointercancel',endDrag);
+
 });
