@@ -11,10 +11,8 @@ function nearestTrimSnap(time,targets,pixelsPerSecond=40,enabled=true){
  candidates.sort((a,b)=>a.distance-b.distance||(a.kind==='cursor'?-1:b.kind==='cursor'?1:0));return candidates[0]||null;
 }
 function trimBounds(clip,media,timeline){
- const start=clip.timelineStart||0,end=start+clip.endTime-clip.startTime,others=timeline.filter(c=>c.id!==clip.id&&(c.zIndex||0)===(clip.zIndex||0));
- const previous=Math.max(0,...others.filter(c=>(c.timelineStart||0)+c.endTime-c.startTime<=start+1e-6).map(c=>(c.timelineStart||0)+c.endTime-c.startTime));
- const next=Math.min(Infinity,...others.filter(c=>(c.timelineStart||0)>=end-1e-6).map(c=>c.timelineStart||0));
- return {left:Math.max(previous,clip.type==='image'?0:start-clip.startTime),right:Math.min(next,clip.type==='image'?86400:start+(media?.duration||media?.element?.duration||clip.endTime)-clip.startTime)};
+ const start=clip.timelineStart||0,primary=clipTrack(clip)===0;
+ return {left:clip.type==='image'?(primary?-86400:0):Math.max(primary?-Infinity:0,start-clip.startTime),right:clip.type==='image'?start+86400:start+(media?.duration||media?.element?.duration||clip.endTime)-clip.startTime};
 }
 function applyTimelineTrim(original,side,edge,bounds,minDuration=.02){
  const clip={...original},start=original.timelineStart||0,end=start+original.endTime-original.startTime;
@@ -24,7 +22,11 @@ function applyTimelineTrim(original,side,edge,bounds,minDuration=.02){
  }else{
    const at=Math.min(bounds.right,Math.max(start+minDuration,edge));clip.endTime=clip.type==='image'?at-start:original.startTime+at-start;
    if(clip.type==='image')clip.startTime=0;
- }return clip;
+ }if(original.scene)clip.scene={...original.scene,visualSourceOffset:(original.scene.visualSourceOffset||0)+clip.startTime-original.startTime};return clip;
+}
+function packPrimaryAfterTrim(timeline,originals){
+ const order=originals.filter(c=>clipTrack(c)===0).sort((a,b)=>(a.timelineStart||0)-(b.timelineStart||0));
+ let at=0;for(const original of order){const clip=timeline.find(c=>c.id===original.id);if(!clip)continue;if(clip.animationStart!==undefined)clip.animationStart+=at-(clip.timelineStart||0);clip.timelineStart=at;at+=clip.endTime-clip.startTime;}
 }
 let timelineTrim=null;
 function showTimelineSnap(snap){
@@ -35,7 +37,7 @@ function finishTimelineTrim(cancelled=false){
  if(!timelineTrim)return;const drag=timelineTrim;timelineTrim=null;
  window.removeEventListener('pointermove',moveTimelineTrim);window.removeEventListener('pointerup',endTimelineTrim);window.removeEventListener('pointercancel',cancelTimelineTrim);
  const clip=state.timeline.find(c=>c.id===drag.original.id);if(!clip)return;
- if(cancelled)Object.assign(clip,drag.original);else if(JSON.stringify(clip)!==JSON.stringify(drag.original))pushState();
+ if(cancelled){for(const original of drag.timeline){const current=state.timeline.find(c=>c.id===original.id);if(current)Object.assign(current,original);}}else if(JSON.stringify(state.timeline)!==JSON.stringify(drag.timeline))pushState();
  showTimelineSnap(null);renderTimeline();renderCanvasFrame();
 }
 function moveTimelineTrim(event){
@@ -48,6 +50,7 @@ function moveTimelineTrim(event){
  const targets=drag.targets.filter(t=>t.time>=lower-1e-6&&t.time<=upper+1e-6);
  let snap=nearestTrimSnap(requested,targets,PIXELS_PER_SECOND,state.isSnapping&&!event.altKey);
  const trimmed=applyTimelineTrim(original,drag.side,snap?snap.time:requested,drag.bounds,drag.minimum);Object.assign(clip,trimmed);
+ if(clipTrack(clip)===0)packPrimaryAfterTrim(state.timeline,drag.timeline);
  const actual=(clip.timelineStart||0)+(drag.side==='right'?clip.endTime-clip.startTime:0);if(snap&&Math.abs(actual-snap.time)>1e-6)snap=null;
  renderTimeline();renderCanvasFrame();
  const handle=document.querySelector(`.trim-handle[data-clip-id="${clip.id}"][data-side="${drag.side}"]`);handle?.classList.toggle('snapped',!!snap);showTimelineSnap(snap);
@@ -59,7 +62,7 @@ function setupTrimEvents(){
    if(event.button!==0||timelineTrim)return;event.preventDefault();event.stopPropagation();pausePlayback();
    const clip=state.timeline.find(c=>c.id===handle.dataset.clipId);if(!clip)return;const media=state.mediaFiles.find(m=>m.id===clip.mediaId),targets=trimSnapTargets(clip,state.timeline,state.currentTime);
    if(clip.type==='video')for(const segment of media?.speechBounds||[])for(const value of [segment.start,segment.end])if(value>=0&&value<=(media.duration||clip.endTime))targets.push({time:(clip.timelineStart||0)+value-clip.startTime,label:'Voix',kind:'voice'});
-   timelineTrim={original:structuredClone(clip),side:handle.dataset.side,x:event.clientX,pointerId:event.pointerId,bounds:trimBounds(clip,media,state.timeline),targets,minimum:Math.min(.02,(clip.endTime-clip.startTime)/2)};
+   timelineTrim={timeline:structuredClone(state.timeline),original:structuredClone(clip),side:handle.dataset.side,x:event.clientX,pointerId:event.pointerId,bounds:trimBounds(clip,media,state.timeline),targets,minimum:Math.min(.02,(clip.endTime-clip.startTime)/2)};
    window.addEventListener('pointermove',moveTimelineTrim,{passive:false});window.addEventListener('pointerup',endTimelineTrim);window.addEventListener('pointercancel',cancelTimelineTrim);
  });
 }

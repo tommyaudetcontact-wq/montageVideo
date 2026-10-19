@@ -3,6 +3,7 @@ function workspaceHeight(){return typeof state!=="undefined"?state.projectHeight
 'use strict';
 const clamp01=value=>Math.max(0,Math.min(1,value));
 function animationRange(clip) {
+  if(clip.scene&&!clip.sceneView&&window.SceneEngine){const range=SceneEngine.rangeFor(clip);if(range)return range;}
   return {start:clip.animationStart ?? clip.timelineStart ?? 0,duration:Math.max(0.001,clip.animationDuration ?? (clip.endTime-clip.startTime))};
 }
 function layerPose(clip) {
@@ -69,7 +70,7 @@ function updateKeyframeFromEdit(clip) {
 function prepareLayerEdit(clip) {if(clip.keyframes?.length)applyPose(clip,manualPose(clip,state.currentTime));}
 function retainSplitAnimation(original,left,right) {
   const range=animationRange(original);
-  for(const clip of [left,right]) {clip.animationStart=range.start;clip.animationDuration=range.duration;clip.keyframes=structuredClone(original.keyframes||[]);}
+  for(const clip of [left,right]) {clip.animationStart=range.start;clip.animationDuration=range.duration;clip.keyframes=structuredClone(original.keyframes||[]);if(original.scene)clip.scene={...structuredClone(original.scene),visualSourceOffset:(original.scene.visualSourceOffset||0)+clip.startTime-original.startTime};}
 }
 function fullHeightPose(width,height) {
   const h=workspaceHeight(),w=h*(width||720)/(height||1280);

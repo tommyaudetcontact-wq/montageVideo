@@ -13,7 +13,7 @@ function makeWaveformData(buffer){
 }
 function projectCheckpoint(){
  const settings={};for(const id of PROJECT_SETTINGS)settings[id]=document.getElementById(id).value;
- return {version:1,id:currentProjectId,name:currentProjectName,savedAt:Date.now(),live:{timeline:structuredClone(state.timeline),groups:structuredClone(state.groups),activeClipId:state.activeClipId,projectWidth:workspaceWidth(),projectHeight:workspaceHeight()},timelineZoom:PIXELS_PER_SECOND,currentTime:state.currentTime,isSnapping:state.isSnapping,historyStack:[...historyStack],historyIndex,settings,mediaIds:state.mediaFiles.map(m=>m.id)};
+ return {version:1,id:currentProjectId,name:currentProjectName,savedAt:Date.now(),live:{timeline:structuredClone(state.timeline),groups:structuredClone(state.groups),activeClipId:state.activeClipId,projectWidth:workspaceWidth(),projectHeight:workspaceHeight()},timelineZoom:PIXELS_PER_SECOND,workspaceSnap:state.workspaceSnap!==false,currentTime:state.currentTime,isSnapping:state.isSnapping,historyStack:[...historyStack],historyIndex,settings,mediaIds:state.mediaFiles.map(m=>m.id)};
 }
 function saveLocalProject(){
  if(!localReady)return Promise.resolve(true);
@@ -55,12 +55,13 @@ async function restoreLocalMedia(record){
 }
 async function restoreProjectSnapshot(saved){
  if(saved.version!==1)throw Error('Version du projet local non prise en charge.');
- const records=await Promise.all(saved.mediaIds.map(id=>localRead('media',id)));if(records.some(r=>!r||(!r.file&&r.storage!=='binary-chunks-v1')))throw Error('Un média manque dans la sauvegarde locale.');
+ const records=await Promise.all(saved.mediaIds.map(id=>localRead('media',id)));if(records.some(r=>!r||(!r.file&&!['binary-chunks-v1','opfs-v1'].includes(r.storage))))throw Error('Un média manque dans la sauvegarde locale.');
  const restored=await Promise.all(records.map(restoreLocalMedia));
- pausePlayback();clearTimeout(maskPreloadTimer);clearCutoutCache();
+ pausePlayback();if(typeof mediaVisualGeneration!=='undefined')mediaVisualGeneration++;window.clearMultiSelection?.();clearTimeout(maskPreloadTimer);clearCutoutCache();
  for(const video of clipPlayers.values()){video.pause();video.removeAttribute('src');video.load();}clipPlayers.clear();
  for(const media of state.mediaFiles){media.element?.pause?.();URL.revokeObjectURL(media.url);}
  greenScreenProcessor.frames.clear();greenScreenProcessor.previewSurfaces.clear();
+ state.workspaceSnap=saved.workspaceSnap!==false;window.refreshWorkspaceSnap?.();
  state.mediaFiles=restored;localMediaWritten.clear();for(const m of restored)localMediaWritten.add(m.id);
  PIXELS_PER_SECOND=timelineZoomValue(saved.timelineZoom||40);window.PocketCutTimeline?.refresh();
  currentProjectId=saved.id;currentProjectName=saved.name||'Mon montage';
@@ -70,7 +71,7 @@ async function restoreProjectSnapshot(saved){
  document.getElementById('precache-progress').hidden=true;document.getElementById('export-progress').hidden=true;
  restoreState(JSON.stringify(saved.live));state.currentTime=Math.min(state.currentTime,getTotalDuration());renderTimeline();window.revealSelectedLayer?.();renderCanvasFrame();
  document.getElementById('projects-btn').title='Projet ouvert : '+currentProjectName;
- scheduleCutoutPreload();localStatus('✓ Ouvert · '+currentProjectName);
+ scheduleCutoutPreload();window.scheduleMediaVisuals?.();localStatus('✓ Ouvert · '+currentProjectName);
 }
 async function initLocalSession(){
  try{
@@ -88,7 +89,7 @@ async function initPresetControls(){
  const byId=id=>document.getElementById(id);let presets=[];
  const active=()=>state.timeline.find(c=>c.id===state.activeClipId);
  async function refresh(selected){
-   presets=(await localAll('presets')).sort((a,b)=>a.name.localeCompare(b.name,'fr'));
+   presets=(await localAll('presets')).filter(p=>p.kind!=='scene-v2').sort((a,b)=>a.name.localeCompare(b.name,'fr'));
    const list=byId('preset-list');list.replaceChildren();
    if(!presets.length){const option=document.createElement('option');option.textContent='Aucun préréglage enregistré';option.value='';list.appendChild(option);}
    for(const p of presets){const option=document.createElement('option');option.value=p.id;option.textContent=p.name;list.appendChild(option);}
@@ -103,9 +104,9 @@ async function initPresetControls(){
  byId('apply-preset').onclick=()=>{
    const c=active(),preset=presets.find(p=>p.id===byId('preset-list').value);if(!c)return showToast('Sélectionnez un calque.');if(!preset)return;
    pausePlayback();const group=c.groupId&&state.groups[c.groupId],clips=group?.kind==='sequence'?state.timeline.filter(x=>x.groupId===c.groupId):[c];
-   const span=clips.length>1?groupRange(c.groupId,state.timeline):{start:c.timelineStart||0,duration:c.endTime-c.startTime};
-   for(const x of clips){applyClipPreset(preset,x,span);greenScreenProcessor.frames.delete(x.id);}
-   if(clips.length>1){group.autoZoom=structuredClone(preset.autoZoom);for(const x of clips)x.autoZoom={enabled:false,percent:15};}
+   const targets=window.editTargets?.(c)||clips,groups=new Set();
+   for(const x of targets){const grouped=x.groupId&&state.groups[x.groupId]?.kind==='sequence',span=grouped?groupRange(x.groupId,state.timeline):{start:x.timelineStart||0,duration:x.endTime-x.startTime};applyClipPreset(preset,x,span);greenScreenProcessor.frames.delete(x.id);if(grouped){groups.add(x.groupId);x.autoZoom={enabled:false,percent:15};}}
+   for(const id of groups)state.groups[id].autoZoom=structuredClone(preset.autoZoom);
    state.editPoseClipId=null;pushState();renderTimeline();renderCanvasFrame();greenScreenProcessor.updateSlidersUI(c);byId('preset-status').textContent='« '+preset.name+' » appliqué · durée adaptée.';
  };
  byId('rename-preset').onclick=async()=>{

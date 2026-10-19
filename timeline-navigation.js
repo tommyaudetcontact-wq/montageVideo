@@ -30,6 +30,7 @@ document.addEventListener('DOMContentLoaded',()=>{
    else if(points.size===2){const [a,b]=[...points.values()];pinch={distance:Math.max(1,Math.hypot(a.x-b.x,a.y-b.y)),scale:PIXELS_PER_SECOND};drag=null;window.timelineDragged=true;}
  });
  window.addEventListener('pointermove',e=>{
+   if(window.clipReorderActive)return;
    if(!points.has(e.pointerId))return;points.set(e.pointerId,{x:e.clientX,y:e.clientY});
    if(pinch&&points.size===2){e.preventDefault();const [a,b]=[...points.values()];zoom(pinch.scale*Math.hypot(a.x-b.x,a.y-b.y)/pinch.distance,(a.x+b.x)/2-area.getBoundingClientRect().left);return;}
    if(!drag||drag.id!==e.pointerId)return;
@@ -42,10 +43,10 @@ document.addEventListener('DOMContentLoaded',()=>{
    if(!points.has(e.pointerId))return;points.delete(e.pointerId);
    if(pinch){pinch=null;drag=null;stop();}
    else if(drag?.id===e.pointerId){if(e.type==='pointerup'&&window.timelineDragged&&performance.now()-drag.time<100){last=performance.now();frame=requestAnimationFrame(inertia);}else stop();drag=null;}
-   if(!points.size)setTimeout(()=>window.timelineDragged=false,0);
+   if(!points.size&&!window.clipReorderActive)setTimeout(()=>window.timelineDragged=false,0);
  }
  window.addEventListener('pointerup',finish);window.addEventListener('pointercancel',finish);
  window.addEventListener('blur',()=>{stop();points.clear();drag=pinch=null;window.timelineDragged=false;});
  document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();});
- window.PocketCutTimeline={zoom,stop,refresh:label,get scale(){return PIXELS_PER_SECOND;}};label();
+ window.PocketCutTimeline={zoom,stop,cancelGesture(){stop();points.clear();drag=pinch=null;},refresh:label,get scale(){return PIXELS_PER_SECOND;}};label();
 });

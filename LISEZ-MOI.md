@@ -1,74 +1,75 @@
-# PocketCut · Projets, rognage et Android
+# PocketCut Studio — Version 2
 
-Déposez tous les fichiers de ce dossier ensemble à la racine de votre site GitHub Pages. Aucun build, serveur applicatif, Python, compte ou clé API n’est nécessaire. Ouvrez l’adresse HTTPS de GitHub Pages. Vous pouvez aussi ouvrir index.html directement si votre navigateur autorise les CDN et les workers Blob depuis file://.
+Cette V2 part de la dernière version de PocketCut (désormais V1). Elle ajoute un montage guidé par la narration et des scènes liées. Aucun code de Concat n’a été repris.
 
-Le moteur IA et son modèle sont inclus dans assets/ai et chargés depuis votre site ; des CDN servent de secours. Les autres bibliothèques utilisent encore leurs CDN : Internet est nécessaire. Les fichiers importés, l’analyse, le montage et l’export restent dans votre navigateur. Il n’y a aucun téléversement de vos vidéos. Le projet, ses médias et son historique sont sauvegardés localement dans IndexedDB. Les masques de détourage restent en mémoire : ils sont recalculés après réouverture.
+## Publier et garder la V1
 
-## Version 18 · imports Android et navigation timeline
+Déposez tout le contenu de ce ZIP dans un dossier `v2/` de votre dépôt GitHub Pages. Votre V1 reste à son adresse habituelle ; la V2 s’ouvre avec `/v2/` à la fin. Le site est statique : aucun serveur personnel ni commande à lancer. Internet sert au chargement des bibliothèques CDN ; vos vidéos restent traitées et sauvegardées dans le navigateur.
 
-Les vidéos sélectionnées ensemble sont triées par date de dernière modification du fichier, de la plus ancienne à la plus récente, puis importées une à la fois à la suite de la piste principale. Les dates identiques gardent l’ordre de sélection ; les fichiers sans date exploitable passent en dernier. Les clips déjà montés ne sont pas réordonnés. Cette date est celle fournie par le navigateur, pas nécessairement la date de tournage. Chaque média est sauvegardé avant de traiter le suivant, pour éviter les pointes de mémoire liées aux analyses simultanées. La sauvegarde ne stocke plus les nouveaux File/Blob directement dans IndexedDB : elle écrit des blocs binaires de 48 Kio, par lots bornés. Les médias déjà sauvegardés ne sont pas réécrits lors des modifications. Le projet n’est validé qu’après l’enregistrement de tous ses médias. Une écriture interrompue peut reprendre ; un média incomplet n’est pas publié. Les anciens médias restent lisibles sans conversion imposée. L’espace disponible est contrôlé avant d’écrire un nouveau fichier ; un stockage plein peut toujours empêcher une sauvegarde.
+Le dossier `assets/ai/` doit être publié avec les autres fichiers. Gardez le chemin de publication de la V2 stable : les sauvegardes sont locales au navigateur, à l’origine et au dossier du site.
 
-La timeline se zoome avec **−/+**, un **pincement à deux doigts**, ou **Ctrl/molette** sur ordinateur. Le zoom va de 12,5 % à 800 % et reste associé au projet. Les boutons conservent le temps sous le curseur ; la molette et le pincement prennent leur point central comme repère. Glisser puis relâcher rapidement lance un défilement avec inertie, qui ralentit progressivement. Un nouvel appui interrompt l’élan ; le lancement de la lecture l’arrête également. Les poignées de rognage temporel et les keyframes gardent leurs gestes propres.
+La V2 utilise un stockage distinct, même si elle est publiée au même chemin que la V1. Les projets et préréglages V1 ne sont pas importés automatiquement ; ils restent dans la V1. Les compositions V2 sont disponibles entre tous les projets V2 du même navigateur et de la même adresse. Il n’y a pas de synchronisation automatique PC/Android.
 
-Pour mettre à jour GitHub Pages, remplacez l’ensemble des fichiers et conservez assets/ai. Fermez les autres onglets de l’application avant la première ouverture de cette mise à jour, qui ajoute un magasin de blocs à la base locale. **N’effacez pas les données du site** : projets et préréglages existants sont conservés. Après un import, attendez « Sauvegardé » avant de fermer la page. Ces corrections ont été testées dans Chromium sur ordinateur avec événements tactiles simulés ; elles restent à confirmer sur votre téléphone Android.
+## Le parcours rapide
 
-## Nouveautés version 17
+1. **Prises** : importer vos vidéos, classées de la plus ancienne à la plus récente.
+2. **AutoCut** : un clic applique directement le comportement classique de la V1 (dernier bloc parlé). Maintenir ouvre les options, dont le nettoyage des pauses intérieures avec proposition avant application. Annuler reste disponible.
+3. Sélectionner un clip principal ou plusieurs, puis **Illustrer**. Les champs Début/Fin permettent de choisir une plage à la seconde près, même à l’intérieur d’un clip.
+4. Choisir une image ou une vidéo dans les médias du projet, ou l’importer directement dans cette fenêtre.
+5. Choisir une présentation, un placement et appliquer.
 
-**Projets** ouvre votre bibliothèque : donnez un nom, créez un nouveau montage ou revenez à un autre. Chaque projet conserve ses médias, réglages et son propre historique Annuler/Rétablir, même après rechargement. Les préréglages sont communs aux projets. L’ancien montage est migré sous « Mon premier montage ». Un changement de projet attend la sauvegarde du montage ouvert ; si elle échoue, le changement est interrompu.
+Les quatre présentations :
 
-**Rogner** ouvre un aperçu de la source avec huit poignées et un cadre déplaçable. Choisissez Libre, Original, Carré, Vertical 9:16, Paysage 16:9 ou Portrait 4:5. Les quatre côtés se règlent aussi numériquement. Réinitialiser récupère l’image entière. Le rognage est non destructif et conserve la pose, la rotation et les animations ; il est inclus dans les préréglages et l’export. Un ratio fixe est adapté aux dimensions du prochain média. L’aperçu de rognage présente la source sans sa rotation pour faciliter les réglages.
+- **Fond + moi détouré** : narration au premier plan, détourage activé ; fond cadré avec zoom progressif de 100 à 135 %, pop-up d’entrée et sortie de 0,25 s par défaut. Les paramètres sont modifiables. Placements droite/gauche inclinés, centre et réaction grand format.
+- **Écran partagé** : narration cadrée dans la moitié haute, illustration dans la moitié basse ; aucun détourage nécessaire. Le visage occupe une bande de 30 % en haut et le visuel zoomé occupe les 70 % restants. Le cadrage vertical du visage et la hauteur de cette bande sont réglables dans Cadrage et audio.
+- **Extrait seul** : seule l’illustration est visible. Vous pouvez conserver votre narration, écouter l’extrait ou les deux selon les cases audio.
+- **Face caméra** : retirer l’illustration et retrouver le cadrage du clip avant sa mise en scène.
 
-**Étirer/rétrécir un clip** : avec Aimant, ses poignées accrochent les extrémités des autres calques, le curseur et le début du montage. Un guide doré indique la cible. Alt suspend l’aimant sur ordinateur. Les limites du média et les clips voisins de la même rangée sont respectés. Le réglage manuel ne déplace pas automatiquement les autres clips.
+Une illustration vidéo plus courte que le passage peut boucler ou geler sa dernière image. Un gel est silencieux. L’audio du fond est coupé par défaut ; votre voix n’est pas dupliquée.
 
-**Android** : les transactions rouvrent automatiquement une connexion IndexedDB fermée et réessaient jusqu’à trois fois. Le moteur IA utilise un seul worker sur mobile pour réduire la mémoire utilisée ; « Réessayer IA » permet de relancer son chargement après une erreur. Le moteur, ses deux variantes WASM et le modèle sont fournis dans **assets/ai** : téléversez impérativement ce dossier avec tous les fichiers, sans changer leur organisation. L’archive est donc plus volumineuse. Aucun serveur applicatif n’est nécessaire.
+## Les scènes sont liées à la narration
 
-La sauvegarde reste propre à chaque appareil, navigateur et adresse du site. Elle n’est pas synchronisée par GitHub. Conservez la même adresse pour retrouver vos projets. Ne videz pas les données du site pour appliquer cette mise à jour.
+Le ruban au-dessus de la timeline montre les scènes. Touchez une scène pour modifier son fond, ses paramètres ou sa présentation. Le fond est calculé à partir de la scène, sans ajouter un clip indépendant qu’il faudrait recaler à la main.
 
-## Commandes
+Diviser, raccourcir, réordonner ou nettoyer la narration entraîne l’illustration avec elle. Une coupe technique à l’intérieur d’une même scène ne relance pas l’entrée pop-up ni le zoom du fond. Si les morceaux d’une scène sont séparés par d’autres passages, ils deviennent des apparitions distinctes.
 
-Sélectionnez un clip sur la timeline ou touchez directement son sujet dans l’aperçu avant d’utiliser un outil. Les deux rangées défilent horizontalement sur petit écran.
+L’option **Continuer le PIP précédent si sa pose est identique** permet de garder le sujet présent entre deux scènes voisines, sans nouveau pop-up. Position, dimensions et rotation doivent correspondre. Chaque fond conserve son propre zoom.
 
-- **PIP IA** : crée une copie détourée centrée à pleine hauteur, son coupé. Maintenez 450 ms pour ouvrir position X/Y, zoom et rotation. Deux doigts permettent aussi de zoomer et tourner dans l’aperçu.
-- **Détourer** : active/désactive immédiatement le détourage du clip sélectionné. Maintenez pour modifier Contour, Douceur et Qualité.
-- **Animation** : applique immédiatement le pop-up de 0,25 s au clip détouré sélectionné. Maintenez pour changer sa durée, désactiver ou tester l’effet. L’entrée et la sortie suivent la rotation du calque. Le sujet commence hors de la scène, grandit jusqu’à votre pose, puis rétrécit en sortant. Les clips courts adaptent la durée.
-- **Volume** : réglage immédiat de 0 à 400 % avec le curseur, jusqu’à 1000 % avec la valeur numérique. Un signal déjà fort peut saturer après amplification.
-- **Mute** : coupe/rétablit le son. **Décalage son** : valeur positive = son retardé ; négative = son avancé. Le son reste dans la durée du clip et les bornes du média découpé. Lecture et export utilisent le même gain et décalage.
-- **Keyframes** : placez le curseur, ajoutez un point, puis déplacez le curseur et réglez position, zoom ou rotation. Les valeurs sont interpolées. Le point au curseur devient plus grand et doré. Touchez un point pour le rejoindre ; maintenez-le 450 ms pour le supprimer (sur la timeline ou dans la liste). Le bouton « Supprimer la keyframe » agit sur le point sous le curseur. La suppression est annulable.
-- **Auto-keyframes** : ouvre le zoom progressif. Modifier la valeur l’active immédiatement ; +15 % par défaut. La case permet de désactiver. Pour une fusion, le zoom couvre toute la capsule sans repartir de zéro entre les clips.
-- **AutoCut** : conserve la dernière prise sonore détectée. **Diviser** : coupe au curseur ; avec l’aimant, si la coupe tombe dans un silence, ramène les extrémités à la fin et au début des plages sonores voisines. Une coupe à l’intérieur d’une plage sonore reste à votre position. La détection repose sur l’énergie du son, pas sur une transcription : musique et bruit peuvent aussi être détectés.
-- **Fusionner** : touchez le bouton, puis les clips d’une même rangée, puis OK. Sélectionnez également les clips intermédiaires. Les portions sont réunies bout à bout en une seule capsule éditable, sans réencodage des médias. Le zoom du groupe couvre toute sa durée ; Mute, volume, décalage, changement de rangée et suppression concernent la capsule entière. Annuler permet de revenir avant la fusion.
-- **Image PIP / Vidéo** : import local. Les calques ajoutés sont centrés ; les images et copies PIP occupent la hauteur de travail.
+Les clips gardent leur source et leurs temps source : la voix et la personne détourée sautent ensemble aux mêmes endroits après un AutoCut. Le zoom du fond suit la durée de la scène remontée. Les masques IA sont partagés par média et temps source ; modifier le fond ou la pose ne relance pas l’analyse. Seuls les passages effectivement marqués pour le détourage sont préparés, pas la totalité du tournage.
 
-Un petit **+** dans le coin des outils PIP IA, Détourer et Animation signale leurs réglages par maintien. Un appui long n’exécute pas aussi le clic court. Sur ordinateur, clic droit ou Maj+Entrée ouvre également les réglages. Les valeurs dans les fenêtres s’appliquent immédiatement ; aucune étape « cocher puis appliquer ».
+## Compositions personnelles
 
-## Sauvegarde locale et préréglages
+Après avoir appliqué une scène, déplacez, zoomez ou tournez le sujet avec vos doigts, ou avec **Modifier clip** dans **Tous les outils**. Rouvrez **Illustrer**, donnez un nom dans **Mes compositions**, puis enregistrez la scène sélectionnée.
 
-La sauvegarde est automatique après les modifications et les annulations/rétablissements. L’indicateur affiche « Enregistrement… », puis « Sauvegardé localement ». En revenant à la même adresse avec le même navigateur, le projet, les médias importés, le format, les réglages et l’historique complet sont restaurés. Une branche Rétablir reste disponible si vous aviez quitté après une annulation. Les formes d’onde compactes et les plages sonores sont conservées ; l’audio complet est décodé à la demande. Aucune réimportation des fichiers n’est nécessaire.
+Une composition mémorise la présentation, le cadrage du fond, les réglages d’animation, d’audio et la pose du sujet avec ses keyframes et son rognage. Elle n’impose pas le même fichier d’illustration : choisissez votre nouveau média, chargez une composition puis appliquez. Positions et temps de keyframes s’adaptent au format et à la durée du passage. La durée relative du pop-up d’une composition peut donc varier avec la longueur du nouveau passage ; la valeur de 0,25 s est celle de la création d’une scène par défaut.
 
-La sauvegarde appartient aux données de ce navigateur, pour cette adresse de site. Elle ne se synchronise pas sur un autre appareil. Effacer les données du site ou utiliser une session privée peut la supprimer. En cas de stockage plein ou bloqué, un message indique que les dernières modifications ne sont pas sauvegardées ; attendez l’indicateur de réussite avant de fermer. Les masques IA, qui peuvent être volumineux, sont recalculés à la réouverture.
+## Nettoyage prudent
 
-**Mes préréglages** ouvre la bibliothèque locale. Sélectionnez le calque à mémoriser, donnez un nom et utilisez « Enregistrer le calque actuel ». Plus tard, sélectionnez un autre calque, choisissez le préréglage et cliquez « Appliquer au calque ». Vous pouvez renommer un préréglage avec le champ Nom et le bouton Renommer. Appliquer reste annulable dans le projet.
+**AutoCut classique**, par défaut, garde le dernier bloc parlé, avec 0,08 s avant et 0,15 s après. Le bouton agit directement, comme dans la V1.
 
-Un préréglage conserve position, hauteur affichée, rotation, rognage, keyframes, auto-zoom, pop-up, détourage vidéo, volume, mute et décalage audio. Les positions et hauteurs sont proportionnelles à la zone de travail ; le nouveau média garde son propre ratio. Les temps des keyframes et la durée du pop-up sont proportionnels à la durée cible. Un point placé au milieu d’un clip de dix secondes sera donc au milieu d’un clip de deux secondes. Le préréglage conserve les réglages, pas le fichier, les coupes ni l’emplacement du nouveau clip sur la timeline.
+L’option **Retirer les silences** conserve tous les blocs parlés détectés et garde, par défaut, 0,08 s avant et 0,15 s après. Les pauses intérieures suffisamment longues sont retirées ; les pauses plus courtes sont gardées. Le seuil de pause est réglable à partir de 0,6 s. Sans voix détectée, le clip reste intact.
 
-## Sélection dans l’aperçu
+**Dernier bloc parlé**, utilisé par le mode classique, peut supprimer des paroles valides et ne sait pas reconnaître la meilleure prise. La détection utilise le niveau sonore, pas une transcription ni une compréhension des phrases.
 
-Un toucher choisit le calque visible à cet endroit, en tenant compte de la rotation, du rognage et des zones transparentes. Sur un PIP détouré, toucher le sujet sélectionne le PIP et sa capsule dans la timeline ; toucher le transparent permet d’atteindre le calque derrière. La rangée sélectionnée devient visible si nécessaire. Le premier doigt choisit le calque du geste, puis les deux doigts modifient ce même calque. Après avoir tapé un PIP, un pinch démarrant sur sa marge transparente conserve ce PIP ; pour modifier le fond, touchez-le d’abord ailleurs.
+Les propositions affichent les intervalles conservés et la durée retirée. **Écouter l’original** sert à vérifier le contenu avant de valider ; ce bouton ne joue pas un montage provisoire des coupes. Après application, **Annuler** et **Rétablir** restent disponibles, y compris après réouverture du projet.
 
-La disposition est conservée. Les surfaces passent au mauve et à l’orange brûlé ; les outils alternent vert, rouge, bleu, jaune, mauve et orange.
+## Outils avancés et export
 
-## Timeline et format
+**Tous les outils** retrouve les fonctions de la V1 : PIP manuel, rognage, volume et décalage son, calques visuels, déplacement, division, duplication, gel, multisélection, keyframes, fusion et préréglages de clip. Les compositions de scène sont séparées de ces préréglages de clip.
 
-Glissez la souris ou le doigt sur la timeline pour la faire défiler. Un toucher immobile sélectionne un clip. Seule la sélection possède des poignées : elles sont en dehors du contenu, qui représente exactement la durée vidéo. Le curseur atteint la fin du montage et conserve la dernière image.
+Les sauvegardes de projets et les médias restent locaux. L’export MP4 H.264/AAC utilise la même composition de scène que l’aperçu, image par image. Le détourage final de la V1 est conservé ; cette V2 ne remplace pas le modèle IA et ne garantit pas une segmentation parfaite de toutes les scènes.
 
-Les boutons **Format** et **Qualité** sont près d’Aimant et Exporter. Formats : vertical 9:16, paysage 16:9, carré 1:1, portrait 4:5. Annuler/Rétablir inclut le changement de format. Le format vertical est celui par défaut pour Shorts, Reels et TikTok.
+## Vérifications et limites
 
-## Précalcul et export
+Tests de scènes, coupes, continuité, sources audio, animations, crop, duplication, gel et stockage. Test navigateur avec une vidéo de contrôle, masque IA réel, nettoyage de silences, changement de projet, réouverture et export MP4 redécodé. Détails dans VERIFICATIONS.md.
 
-Le détourage précalcule un masque pour chaque véritable image source, y compris une cadence variable. Il réutilise ces masques pendant la lecture et l’export. Les pixels vidéo restent à la définition source. Déplacer, tourner, zoomer, fusionner ou animer ne refait pas le calcul. Raccourcir réutilise le cache ; rallonger calcule seulement les images manquantes. Modifier les paramètres de détourage invalide les masques.
+L’affichage mobile est vérifié dans le navigateur sur PC ; aucun Pixel 9 physique n’est accessible pour certifier les longues sessions ou les projets de plusieurs gigaoctets. Les bibliothèques et codecs dépendent du navigateur ; utilisez une version récente de Chrome Android en HTTPS.
 
-Le pipeline fait l’analyse et la compression PNG dans 1 à 3 workers selon les cœurs annoncés par l’appareil : 1 sous 4 cœurs, 2 de 4 à 7, 3 à partir de 8. Le premier moteur est réutilisé. Aucun abaissement de la cadence ou de la définition d’analyse n’est ajouté pour accélérer. Cache PNG limité à 128 Mo, masques décodés limités à 16 par source.
 
-Mesure de comparaison, navigateur de test de bureau, modèle déjà chargé : 30 images 720 × 1280, analyse équilibrée à 960 pixels sur le grand côté. Trois comparaisons : 1698 → 719 ms (58 %), 1731 → 702 ms (59 %), 1787 → 980 ms (45 %). Gain médian : 58 %, avec une variation de 45 à 59 %. Cette mesure concerne le précalcul, pas le téléchargement initial du modèle. Le gain varie selon le téléphone, les cœurs et la chauffe ; il n’est pas garanti à 50 % sur tous les appareils.
+## Version 2.0.1
 
-L’export MP4 H.264/AAC compose les images hors temps réel avec leurs horodatages. Définition source et cadence source par défaut ; option 1080p selon le format et 30/60 i/s. Aucun rabaissement silencieux d’une définition non prise en charge : un message demande un réglage compatible. WebCodecs et un navigateur récent sont nécessaires. Le modèle Selfie Segmenter détoure les personnes ; ce n’est pas un détourage universel d’objets et les détails fins restent tributaires du modèle.
+Six placements : bas gauche/droite inclinés, haut gauche/droite inclinés (sujet retourné pour entrer depuis le haut), bas gauche/droite droits. La tranche coupée du bas de la source est ancrée hors du cadre après rotation. Les anciens placements par défaut sont corrigés lors de la réouverture ; les poses manuelles avec keyframes ne sont pas réinitialisées.
+
+Le zoom par défaut du fond est de 35 %. Les scènes et compositions dont le zoom a déjà été enregistré conservent leur valeur.
+
+La galerie du projet propose Ajouter et des vignettes avec badges « Déjà importé » ou « Utilisé · n ». Ajouter ouvre le sélecteur photo/vidéo du téléphone, sans imposer la caméra. Android ne permet pas d’injecter nos badges dans sa propre galerie système. Une sélection présentant le même nom, la même taille et la même date que le fichier déjà importé réutilise sa source ; une nouvelle utilisation dans la timeline peut être créée sans recopier le média. Les badges sont locaux au projet ouvert.

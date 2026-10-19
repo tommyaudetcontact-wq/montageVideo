@@ -22,7 +22,7 @@ class GreenScreenProcessor {
       try { this.worker = new Worker(workerURL); }
       finally { URL.revokeObjectURL(workerURL); }
     } else {
-      this.worker=new Worker('segment-worker.js?v=18');
+      this.worker=new Worker('segment-worker.js?v=25');
     }
     this.jobs=new Map(); this.serial=0;
     await new Promise((resolve,reject)=>{
@@ -34,7 +34,7 @@ class GreenScreenProcessor {
         else if(data.type==='error') {const job=this.jobs.get(data.id); if(job){this.jobs.delete(data.id); job.reject(new Error(data.message));} else {clearTimeout(timer); reject(new Error(data.message));}}
         else {const job=this.jobs.get(data.id); if(job){this.jobs.delete(data.id); job.resolve(data);}}
       };
-      this.worker.postMessage({type:'init',refinerURL:new URL('mask-refine.js?v=18',location.href).href,assetBase:new URL('assets/ai/',location.href).href});
+      this.worker.postMessage({type:'init',refinerURL:new URL('mask-refine.js?v=25',location.href).href,assetBase:new URL('assets/ai/',location.href).href});
     });
     this.isReady=true; this.failure=null;this.status('IA prête · ressources '+(this.aiSource||'CDN')+' · traitement sur cet appareil');
   }
@@ -42,15 +42,15 @@ class GreenScreenProcessor {
     const task=this.queue.catch(()=>{}).then(async()=>{
       await this.ready;
       if(video.readyState !== undefined && video.readyState<2) throw new Error('Image vidéo indisponible.');
-      const time=options.time ?? video.currentTime;
-      const cached=!options.maskOnly && window.PocketCutMasks ? await PocketCutMasks.get(clip.mediaId,time,!!options.fullResolution) : null;
+      const time=options.time ?? video.pocketFrameTime ?? video.currentTime;
       const source=document.createElement('canvas');
       const width=video.videoWidth || video.width, height=video.videoHeight || video.height;
       const quality=document.getElementById('ai-quality')?.value || 'balanced';
-      const maxAnalysis=options.fullResolution ? (quality==='fine'?1280:quality==='fast'?512:960) : (quality==='fine'?720:quality==='fast'?256:480);
+      const maxAnalysis=options.draft?256:options.fullResolution ? (quality==='fine'?1280:quality==='fast'?512:960) : (quality==='fine'?720:quality==='fast'?256:480);
       const scale=options.maskOnly ? Math.min(1,maxAnalysis/Math.max(width,height)) : options.fullResolution ? 1 : Math.min(1,1280/Math.max(width,height));
       source.width=Math.round(width*scale); source.height=Math.round(height*scale);
       source.getContext('2d').drawImage(video,0,0,source.width,source.height);
+      const cached=!options.maskOnly && window.PocketCutMasks ? await PocketCutMasks.get(clip.mediaId,time,!!options.fullResolution) : null;
       let mask=cached?.mask;
       if(!mask) {
       const analysis=document.createElement('canvas');
@@ -61,7 +61,7 @@ class GreenScreenProcessor {
       const result=await new Promise((resolve,reject)=>{
         const timer=setTimeout(()=>{this.jobs.delete(id);reject(new Error('Détourage trop lent : rechargez la page.'));},20000);
         this.jobs.set(id,{resolve:d=>{clearTimeout(timer);resolve(d)},reject:e=>{clearTimeout(timer);reject(e)}});
-        this.worker.postMessage({type:'segment',id,bitmap,threshold:Number(document.getElementById('ai-threshold').value),softness:Number(document.getElementById('ai-softness').value),refine:document.getElementById('ai-quality')?.value!=='fast'},[bitmap]);
+        this.worker.postMessage({type:'segment',id,bitmap,threshold:Number(document.getElementById('ai-threshold').value),softness:Number(document.getElementById('ai-softness').value),refine:!options.draft},[bitmap]);
       });
       mask=document.createElement('canvas'); mask.width=result.width; mask.height=result.height;
       mask.getContext('2d').putImageData(new ImageData(result.rgba,result.width,result.height),0,0);
@@ -72,7 +72,10 @@ class GreenScreenProcessor {
       oc.globalCompositeOperation='source-in'; oc.drawImage(source,0,0);
       if(!options.fullResolution) {
         const safeMask=document.createElement('canvas');safeMask.width=mask.width;safeMask.height=mask.height;safeMask.getContext('2d').drawImage(mask,0,0);
-        this.frames.set(clip.id,{canvas:output,mask:safeMask,time});
+        const final=!!cached?.final||!options.draft;
+        const previous=this.frames.get(clip.id);
+        // An older rapid task must not overwrite a final mask loaded in the meantime.
+        if(final||!previous?.final||!window.PocketCutMasks?.hasFinal?.(clip.mediaId,time))this.frames.set(clip.id,{canvas:output,mask:safeMask,time,paired:true,final});
       }
       this.status(cached?'Détourage précalculé · lecture depuis le cache':'Détourage actif · personne');
       return output;
@@ -81,33 +84,47 @@ class GreenScreenProcessor {
   }
   processFrameFast(video, clip) {
     if(video.readyState<2) return null;
-    const cached=window.PocketCutMasks?.preview(clip.mediaId,video.currentTime);
-    if(cached && this.frames.get(clip.id)?.time!==cached.time) {
+    const presentedTime=video.pocketFrameTime??video.currentTime;
+    const cached=window.PocketCutMasks?.preview(clip.mediaId,presentedTime);
+    if(cached && (this.frames.get(clip.id)?.time!==cached.time||this.frames.get(clip.id)?.cachedMask!==cached.mask)) {
       const old=this.frames.get(clip.id),mask=old?.mask instanceof HTMLCanvasElement?old.mask:document.createElement('canvas');
       if(mask.width!==cached.mask.width||mask.height!==cached.mask.height){mask.width=cached.mask.width;mask.height=cached.mask.height;}
-      const ctx=mask.getContext('2d');ctx.clearRect(0,0,mask.width,mask.height);ctx.drawImage(cached.mask,0,0);this.frames.set(clip.id,{mask,time:cached.time});
+      const ctx=mask.getContext('2d');ctx.clearRect(0,0,mask.width,mask.height);ctx.drawImage(cached.mask,0,0);this.frames.set(clip.id,{mask,time:cached.time,duration:cached.duration,cachedMask:cached.mask,final:cached.final});
     }
     const frame=this.frames.get(clip.id);
-    if(!window.PocketCutMasks && !video.seeking && !this.pending.has(clip.id) && !this.failure && (!frame || Math.abs(frame.time-video.currentTime)>0.025)) {
+    const finalAvailable=window.PocketCutMasks?.hasFinal?.(clip.mediaId,presentedTime);
+    if(!cached && !finalAvailable && !video.seeking && !this.pending.has(clip.id) && Date.now()>(this.retryAfter?.get(clip.id)||0) && !this.failure && (!frame || Math.abs(frame.time-presentedTime)>.001)) {
       this.pending.add(clip.id);
-      this.prepareFrame(video,clip).then(()=>{
+      this.prepareFrame(video,clip,{draft:true}).then(()=>{
         if(!state.isPlaying && typeof renderCanvasFrame==='function') requestAnimationFrame(renderCanvasFrame);
-      }).catch(e=>{ this.failure=e; this.status(e.message); }).finally(()=>this.pending.delete(clip.id));
+      }).catch(e=>{this.retryAfter??=new Map();this.retryAfter.set(clip.id,Date.now()+1000);this.status('Détourage : '+e.message);}).finally(()=>this.pending.delete(clip.id));
     }
-    if(!frame || (!state.isPlaying && Math.abs(frame.time-video.currentTime)>=0.25)) return null;
+    if(!cached&&finalAvailable){
+      const surface=this.previewSurfaces.get(clip.id);
+      // Hold matching image AND final alpha while the next PNG decodes. Never stretch
+      // a previous mask onto a different source image after final preparation.
+      if(surface?.final&&Math.abs(surface.time-presentedTime)<.15)return surface.canvas;
+      if(frame?.final&&frame.paired&&Math.abs(frame.time-presentedTime)<.15)return frame.canvas;
+      return null;
+    }
+    if(!frame)return null;
+    if(!cached && (!frame.mask || Math.abs(frame.time-presentedTime)>.12))return frame.paired&&Math.abs(frame.time-presentedTime)<=.3?frame.canvas:null;
+    if(cached&&!maskEntryMatches(frame,presentedTime))return null;
     // The mask is inferred asynchronously; video pixels advance on every render.
     // Never freeze the foreground at the inference cadence.
     let surface=this.previewSurfaces.get(clip.id);
     if(!surface){const canvas=document.createElement('canvas');surface={canvas,ctx:canvas.getContext('2d')};this.previewSurfaces.set(clip.id,surface);}
-    const factor=Math.min(1,1280/Math.max(video.videoWidth,video.videoHeight));
+    const factor=Math.min(1,(/Android|iPhone|iPad/i.test(navigator.userAgent)?720:1280)/Math.max(video.videoWidth,video.videoHeight));
     const width=Math.round(video.videoWidth*factor),height=Math.round(video.videoHeight*factor);
     if(surface.canvas.width!==width||surface.canvas.height!==height){surface.canvas.width=width;surface.canvas.height=height;}
     const ctx=surface.ctx;ctx.globalCompositeOperation='source-over';ctx.clearRect(0,0,width,height);
     ctx.drawImage(video,0,0,width,height);ctx.globalCompositeOperation='destination-in';ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(frame.mask,0,0,width,height);ctx.globalCompositeOperation='source-over';
+    surface.final=!!cached?.final;surface.time=presentedTime;
     return surface.canvas;
   }
 
   drawClipToCanvas(ctx, sourceElement, clip, isAiProcessed = false, preparedSource = null, renderOptions = {}) {
+    if(clip.hideVisual)return;
     const time=renderOptions.time ?? state.currentTime;
     const editing=!renderOptions.export && !state.isPlaying && state.editPoseClipId===clip.id;
     if(!editing) clip=animatedClip(clip,time,renderOptions.groups || state.groups,renderOptions.timeline || state.timeline);
@@ -119,6 +136,7 @@ class GreenScreenProcessor {
     const rotation = clip.rotation || 0;
 
     ctx.save();
+    if(clip.viewRect){const r=clip.viewRect;ctx.beginPath();ctx.rect(r.x,r.y,r.width,r.height);ctx.clip();}
     ctx.globalAlpha*=clip.opacity ?? 1;
     ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
 
@@ -139,9 +157,8 @@ class GreenScreenProcessor {
       const processed = preparedSource || this.processFrameFast(sourceElement, clip);
       if (processed) {
         ctx.drawImage(processed, drawX, drawY, width, height);
-      } else if (sourceElement.readyState >= 2) {
-        // Preserve the layer while loading or after a failure; never hide it.
-        ctx.drawImage(sourceElement, drawX, drawY, width, height);
+      } else {
+        this.awaitingCutout=true;
       }
     } else {
       ctx.drawImage(sourceElement, drawX, drawY, width, height);
@@ -152,7 +169,7 @@ class GreenScreenProcessor {
 
   attachCanvasInteractions(canvas, getClip, render) {
     canvas.style.touchAction='none';
-    const pointers=new Map(); let initial=null,changed=false,gestureSelection=null;
+    const pointers=new Map(); let initial=null,changed=false,gestureSelection=null,gestureMultiIds=null;
     const point=e=>{const r=canvas.getBoundingClientRect();return {x:(e.clientX-r.left)*canvas.width/r.width,y:(e.clientY-r.top)*canvas.height/r.height};};
     const reset=()=>{
       const c=getClip(),ps=[...pointers.values()];
@@ -162,14 +179,14 @@ class GreenScreenProcessor {
     };
     canvas.addEventListener('pointerdown',e=>{
       if(exporting)return;pausePlayback();
-      if(!pointers.size){changed=false;gestureSelection=getClip()?.id;window.selectLayerAtPoint?.(point(e));}
+      if(!pointers.size){changed=false;gestureSelection=getClip()?.id;gestureMultiIds=typeof multiSelection!=='undefined'&&multiSelection?[...multiClipIds]:null;window.selectLayerAtPoint?.(point(e));}
       let c=getClip();if(c)prepareLayerEdit(c);canvas.setPointerCapture(e.pointerId);pointers.set(e.pointerId,point(e));
-      if(pointers.size===2&&window.retainGestureLayer?.(gestureSelection,[...pointers.values()])){c=getClip();if(c)prepareLayerEdit(c);}
+      if(pointers.size===2&&window.retainGestureLayer?.(gestureSelection,[...pointers.values()])){c=getClip();if(c)prepareLayerEdit(c);if(gestureMultiIds){multiClipIds.clear();for(const id of gestureMultiIds)multiClipIds.add(id);window.ensureMultiClip?.(c);}}
       reset();
     });
     canvas.addEventListener('pointermove',e=>{
       if(!pointers.has(e.pointerId)||!initial)return;
-      pointers.set(e.pointerId,point(e));const c=getClip();if(!c)return;const ps=[...pointers.values()];
+      pointers.set(e.pointerId,point(e));const c=getClip();if(!c)return;const before=layerPose(c),ps=[...pointers.values()];
       changed=true;
       if(ps.length===1){c.x=initial.x+ps[0].x-initial.px;c.y=initial.y+ps[0].y-initial.py;}
       else if(initial.d){
@@ -182,9 +199,10 @@ class GreenScreenProcessor {
         c.x=(ps[0].x+ps[1].x)/2+(dx*Math.cos(angle)-dy*Math.sin(angle))*factor-c.width/2;
         c.y=(ps[0].y+ps[1].y)/2+(dx*Math.sin(angle)+dy*Math.cos(angle))*factor-c.height/2;
       }
+      window.snapWorkspacePose?.(c,ps.length>1,8*canvas.width/canvas.getBoundingClientRect().width);window.propagateSelectionPose?.(c,before);
       updateKeyframeFromEdit(c);this.updateSlidersUI(c);render();
     });
-    const end=e=>{pointers.delete(e.pointerId);reset();if(!pointers.size){if(changed)pushState();renderTimeline();if(window.refreshAnimationPanel)refreshAnimationPanel();}};
+    const end=e=>{pointers.delete(e.pointerId);reset();if(!pointers.size){workspaceSnapGuides=null;if(changed)pushState();renderTimeline();if(window.refreshAnimationPanel)refreshAnimationPanel();}};
     canvas.addEventListener('pointerup',end);canvas.addEventListener('pointercancel',end);
   }
 
@@ -216,7 +234,7 @@ class GreenScreenProcessor {
       if (!clip) return;
 
       pausePlayback();
-      prepareLayerEdit(clip);
+      prepareLayerEdit(clip);const before=layerPose(clip);
       if (sliderX) clip.x = parseFloat(sliderX.value);
       if (sliderY) clip.y = parseFloat(sliderY.value);
       if (sliderScale) {
@@ -230,7 +248,7 @@ class GreenScreenProcessor {
 
 
 
-      updateKeyframeFromEdit(clip);
+      window.propagateSelectionPose?.(clip,before);updateKeyframeFromEdit(clip);
       this.updateSlidersUI(clip);
       renderCallback();
     };

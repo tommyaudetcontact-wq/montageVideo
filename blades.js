@@ -36,13 +36,12 @@ function startProjectAudio(time){
 document.addEventListener('DOMContentLoaded',()=>{
  const byId=id=>document.getElementById(id),active=()=>state.timeline.find(c=>c.id===state.activeClipId);
  const requireClip=()=>{const c=active();if(!c)showToast('Sélectionnez un calque.');return c;};
- const members=c=>c?.groupId&&state.groups[c.groupId]?.kind==='sequence'?state.timeline.filter(x=>x.groupId===c.groupId):c?[c]:[];
+ const members=c=>window.editTargets?.(c)|| (c?[c]:[]);
  const commit=()=>{pushState();renderTimeline();renderCanvasFrame();};
  byId('btn-mute').addEventListener('click',e=>{const c=active(),clips=members(c);pausePlayback();if(clips.length<2)return;e.stopImmediatePropagation();const value=!c.muted;for(const x of clips)x.muted=value;commit();},true);
  for(const [id,direction] of [['btn-layer-up',1],['btn-layer-down',-1]])byId(id).addEventListener('click',e=>{
-   const c=active(),clips=members(c);if(clips.length<2)return;e.stopImmediatePropagation();pausePlayback();
-   const levels=[...new Set(state.timeline.map(x=>x.zIndex||0))].sort((a,b)=>a-b),index=levels.indexOf(c.zIndex||0),target=levels[index+direction];
-   if(target===undefined)return;const old=c.zIndex||0;for(const x of state.timeline)if(!clips.includes(x)&&(x.zIndex||0)===target)x.zIndex=old;for(const x of clips)x.zIndex=target;commit();
+   const c=active(),clips=members(c);if(!clips.length)return;e.stopImmediatePropagation();pausePlayback();
+   shiftSecondaryLayers(clips,direction);commit();
  },true);
  const dialog=byId('tool-dialog'),content=byId('tool-content');let moved=[];
  function restore(){for(const {node,parent,next} of moved){parent.insertBefore(node,next?.parentNode===parent?next:null);node.hidden=true;}moved=[];}
@@ -69,28 +68,29 @@ document.addEventListener('DOMContentLoaded',()=>{
  function hold(id,show,click){
    const b=byId(id);let timer,held=false,start;
    b.classList.add('holdable');b.setAttribute('aria-description','Maintenir pour modifier les réglages.');
-   b.addEventListener('pointerdown',e=>{if(e.button!==0)return;held=false;start={x:e.clientX,y:e.clientY};timer=setTimeout(()=>{held=true;show();},450);});
+   b.addEventListener('pointerdown',e=>{if(e.button!==0)return;held=false;window.heldTool=null;start={x:e.clientX,y:e.clientY};timer=setTimeout(()=>{held=true;window.heldTool=id;show();},450);});
    b.addEventListener('pointermove',e=>{if(start&&Math.hypot(e.clientX-start.x,e.clientY-start.y)>12)clearTimeout(timer);});
    for(const event of ['pointerup','pointercancel','pointerleave'])b.addEventListener(event,()=>clearTimeout(timer));
    b.addEventListener('click',e=>{if(held){e.preventDefault();e.stopImmediatePropagation();held=false;}else if(click){e.preventDefault();e.stopImmediatePropagation();click();}},true);
-   b.addEventListener('contextmenu',e=>{e.preventDefault();clearTimeout(timer);held=true;show();});
+   b.addEventListener('contextmenu',e=>{e.preventDefault();clearTimeout(timer);held=true;window.heldTool=id;show();});
    b.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.shiftKey){e.preventDefault();show();}});
    b.title='Cliquer : appliquer · Maintenir : réglages · Maj+Entrée : réglages';
  }
- hold('btn-duplicate-pip-ai',()=>{const c=requireClip();if(c){open('PIP · position, zoom et rotation',[byId('pip-sliders-panel')]);pausePlayback();state.editPoseClipId=c.id;renderCanvasFrame();}});
+ byId('edit-clip-btn').onclick=()=>{const c=requireClip();if(c){pausePlayback();state.editPoseClipId=c.id;open('Modifier clip · position, zoom et rotation',[byId('pip-sliders-panel')]);renderCanvasFrame();}};
  hold('toggle-ai',()=>open('Affiner le détourage',[document.querySelector('.ai-settings')]));
  byId('btn-animations').onclick=null;
  hold('btn-animations',()=>showAnimation('pop'),()=>{
-   const c=requireClip();if(!c)return;if(!c.aiBackgroundRemoval)return showToast('Activez le détourage du calque pour le pop-up.');
-   pausePlayback();for(const x of members(c))x.popUp={enabled:true,duration:0.25};state.editPoseClipId=null;commit();showToast('Pop-up appliqué · 0,25 s.');
+   const c=requireClip();if(!c)return;const targets=members(c).filter(x=>x.aiBackgroundRemoval);if(!targets.length)return showToast('Activez le détourage du calque pour le pop-up.');
+   pausePlayback();for(const x of targets)x.popUp={enabled:true,duration:0.25};state.editPoseClipId=null;commit();showToast('Pop-up appliqué · 0,25 s.');
  });
- byId('keyframes-btn').onclick=()=>showAnimation('keys');byId('auto-keyframes-btn').onclick=()=>showAnimation('auto');
+ hold('keyframes-btn',()=>showAnimation('keys'),()=>window.toggleSelectedKeyframes?.());
+ hold('btn-autocut-clip',()=>open('AutoCut · piste principale',[byId('autocut-settings')]));byId('auto-keyframes-btn').onclick=()=>{const c=requireClip();if(!c)return;for(const x of members(c)){const target=x.groupId&&state.groups[x.groupId]||x;target.autoZoom={enabled:true,percent:target.autoZoom?.percent??15};}commit();showAnimation('auto');};
  // Settings apply on input; no checkbox-plus-Apply workflow.
  byId('apply-popup').hidden=true;byId('apply-autozoom').hidden=true;
  const savePop=()=>{const c=requireClip();if(!c)return;const duration=Number(byId('popup-duration').value);if(!Number.isFinite(duration)||duration<0.05||duration>3600)return;
-   pausePlayback();for(const x of members(c))x.popUp={enabled:byId('popup-enabled').checked,duration};commit();};
+   pausePlayback();for(const x of members(c).filter(x=>x.aiBackgroundRemoval))x.popUp={enabled:byId('popup-enabled').checked,duration};commit();};
  const saveAuto=()=>{const c=requireClip();if(!c)return;const percent=Number(byId('autozoom-percent').value);if(!Number.isFinite(percent)||percent< -95||percent>1000)return;
-   const target=c.groupId&&state.groups[c.groupId]||c;target.autoZoom={enabled:byId('autozoom-enabled').checked,percent};pausePlayback();commit();};
+   for(const x of members(c)){const target=x.groupId&&state.groups[x.groupId]||x;target.autoZoom={enabled:byId('autozoom-enabled').checked,percent};}pausePlayback();commit();};
  byId('popup-enabled').onchange=savePop;byId('popup-duration').oninput=()=>{byId('popup-enabled').checked=true;savePop();};
  byId('autozoom-enabled').onchange=saveAuto;byId('autozoom-percent').oninput=()=>{byId('autozoom-enabled').checked=true;saveAuto();};
  byId('volume-btn').onclick=()=>{const c=requireClip();if(!c)return;byId('clip-volume').value=(c.volume??1)*100;byId('clip-volume-number').value=(c.volume??1)*100;open('Volume · amplification',[byId('volume-settings')]);};
@@ -115,14 +115,14 @@ document.addEventListener('DOMContentLoaded',()=>{
  };
  const picks=new Set();let fusion=false;
  function paintFusion(){for(const el of document.querySelectorAll('.clip-wrapper'))el.classList.toggle('fusion-picked',picks.has(el.dataset.clipId));byId('fusion-status').textContent=picks.size+' clips · sélectionnez une seule rangée';}
- window.pickFusionClip=c=>{if(!fusion)return false;const first=state.timeline.find(x=>x.id===[...picks][0]);if(first&&(first.zIndex||0)!==(c.zIndex||0)){showToast('Choisissez des clips dans la même rangée.');return true;}picks.has(c.id)?picks.delete(c.id):picks.add(c.id);paintFusion();return true;};
+ window.pickFusionClip=c=>{if(!fusion)return false;const first=state.timeline.find(x=>x.id===[...picks][0]);if(first&&clipTrack(first)!==clipTrack(c)){showToast('Choisissez des clips dans la même rangée.');return true;}picks.has(c.id)?picks.delete(c.id):picks.add(c.id);paintFusion();return true;};
  byId('fusion-btn').onclick=()=>{pausePlayback();fusion=true;picks.clear();byId('fusion-bar').hidden=false;paintFusion();};
  const cancelFusion=()=>{fusion=false;picks.clear();byId('fusion-bar').hidden=true;paintFusion();};byId('fusion-cancel').onclick=cancelFusion;
  byId('fusion-ok').onclick=()=>{
    const chosen=state.timeline.filter(c=>picks.has(c.id));if(chosen.length<2)return showToast('Sélectionnez au moins deux clips.');
    const expanded=new Set(chosen);for(const c of chosen)if(c.groupId)for(const x of state.timeline)if(x.groupId===c.groupId)expanded.add(x);
    const clips=[...expanded].sort((a,b)=>a.timelineStart-b.timelineStart);if(new Set(clips.map(c=>c.zIndex||0)).size!==1)return showToast('La fusion exige une seule rangée.');
-   const row=state.timeline.filter(c=>(c.zIndex||0)===(clips[0].zIndex||0));
+   const row=state.timeline.filter(c=>clipTrack(c)===clipTrack(clips[0]));
    const start=clips[0].timelineStart,end=clips.at(-1).timelineStart+clips.at(-1).endTime-clips.at(-1).startTime;
    if(row.some(c=>!expanded.has(c)&&c.timelineStart<end&&c.timelineStart+c.endTime-c.startTime>start))return showToast('Sélectionnez aussi les clips situés entre les deux.');
    const id='sequence_'+Date.now().toString(36);state.groups[id]={id,kind:'sequence',pivotX:workspaceWidth()/2,pivotY:workspaceHeight()/2,autoZoom:{enabled:false,percent:15}};

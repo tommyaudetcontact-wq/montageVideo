@@ -1,6 +1,6 @@
 'use strict';
 function renderedLayer(clip,time=state.currentTime){
- return !state.isPlaying&&state.editPoseClipId===clip.id?{...clip,opacity:1}:animatedClip(clip,time,state.groups,state.timeline);
+ const drawn=window.SceneEngine?SceneEngine.expand(state.timeline).find(c=>c.id===clip.id)||clip:clip;return !state.isPlaying&&state.editPoseClipId===clip.id?{...drawn,opacity:1}:animatedClip(drawn,time,state.groups,state.timeline);
 }
 function layerLocalPoint(clip,point){
  const pose=layerPose(clip),angle=-pose.rotation*Math.PI/180,dx=point.x-pose.centerX,dy=point.y-pose.centerY;
@@ -18,7 +18,7 @@ function hitTestLayer(point){
  const time=Math.min(state.currentTime,Math.max(0,getTotalDuration()-1e-6));
  const visible=state.timeline.map((clip,index)=>({clip,index})).filter(({clip:c})=>time>=(c.timelineStart||0)&&time<(c.timelineStart||0)+c.endTime-c.startTime).sort((a,b)=>(b.clip.zIndex||0)-(a.clip.zIndex||0)||b.index-a.index);
  for(const {clip} of visible){
-   const drawn=renderedLayer(clip,time);if((drawn.opacity??1)<.05)continue;
+   const drawn=renderedLayer(clip,time);if(drawn.hideVisual||(drawn.opacity??1)<.05)continue;const rect=drawn.viewRect;if(rect&&(point.x<rect.x||point.x>rect.x+rect.width||point.y<rect.y||point.y>rect.y+rect.height))continue;
    const {u,v}=layerLocalPoint(drawn,point),crop=normalizeCrop(clip.crop);
    if(u<(crop.left||0)/100||u>1-(crop.right||0)/100||v<(crop.top||0)/100||v>1-(crop.bottom||0)/100)continue;
    const media=state.mediaFiles.find(m=>m.id===clip.mediaId);if(!media)continue;
@@ -33,7 +33,7 @@ function hitTestLayer(point){
 }
 window.selectLayerAtPoint=point=>{
  const clip=hitTestLayer(point);if(!clip)return null;
- state.activeClipId=clip.id;state.editPoseClipId=null;
+ window.ensureMultiClip?.(clip);state.activeClipId=clip.id;state.editPoseClipId=null;
  greenScreenProcessor.updateSlidersUI(clip);renderTimeline();window.revealSelectedLayer();renderCanvasFrame();window.refreshAnimationPanel?.();window.PocketCutSession?.remember();return clip;
 };
 window.revealSelectedLayer=()=>{

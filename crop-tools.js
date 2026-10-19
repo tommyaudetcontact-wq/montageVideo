@@ -40,7 +40,7 @@ function resizeCrop(crop,handle,dx,dy,ratio='free',aspect=1){
 let cropActiveId=null,cropInputDirty=false,cropDrag=null;
 function cropActiveClip(){return state.timeline.find(c=>c.id===cropActiveId);}
 function cropSourceAspect(clip){return (clip.baseWidth||1)/(clip.baseHeight||1);}
-function cropTargets(clip){return clip?.groupId&&state.groups[clip.groupId]?.kind==='sequence'?state.timeline.filter(c=>c.groupId===clip.groupId):[clip];}
+function cropTargets(clip){return window.editTargets?.(clip)||(clip?[clip]:[]);}
 function applyCropEdit(crop,ratio,commit=false){
  const clip=cropActiveClip();if(!clip)return;
  let changed=false;

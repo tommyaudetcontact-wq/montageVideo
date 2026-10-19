@@ -20,7 +20,25 @@ function refineMaskAlpha(mask,rgb,width,height,radius,threshold,softness) {
   const a=new Float32Array(n),b=new Float32Array(n);
   for(let i=0;i<n;i++){a[i]=(corrIp[i]-meanI[i]*meanP[i])/(Math.max(0,corrI[i]-meanI[i]*meanI[i])+0.002);b[i]=meanP[i]-a[i]*meanI[i];}
   const ma=maskBoxMean(a,width,height,radius),mb=maskBoxMean(b,width,height,radius),rgba=new Uint8ClampedArray(n*4);
-  for(let i=0;i<n;i++){const confidence=Math.max(0,Math.min(1,ma[i]*I[i]+mb[i]));const t=Math.max(0,Math.min(1,(confidence-threshold+softness)/(2*Math.max(0.01,softness))));rgba[i*4]=rgba[i*4+1]=rgba[i*4+2]=255;rgba[i*4+3]=Math.round(t*t*(3-2*t)*255);}
+  for(let i=0;i<n;i++){const guided=Math.max(0,Math.min(1,ma[i]*I[i]+mb[i]));const confidence=p[i]>=.8?Math.max(p[i],guided):p[i]<=.2?Math.min(p[i],guided):Math.max(p[i]-.1,Math.min(p[i]+.1,guided));const t=Math.max(0,Math.min(1,(confidence-threshold+softness)/(2*Math.max(0.01,softness))));rgba[i*4]=rgba[i*4+1]=rgba[i*4+2]=255;rgba[i*4+3]=Math.round(t*t*(3-2*t)*255);}
+  return cleanMaskIslands(rgba,width,height);
+}
+// Remove only tiny disconnected alpha islands; never keep just the largest person.
+// Eight-connected components preserve diagonal hairs and narrow connected fingers.
+function cleanMaskIslands(rgba,width,height) {
+  const n=width*height,seen=new Uint8Array(n),queue=new Int32Array(n);
+  const minimum=Math.max(4,Math.floor(n*.00006));
+  for(let seed=0;seed<n;seed++){
+    if(seen[seed]||rgba[seed*4+3]<12)continue;
+    let head=0,tail=1;queue[0]=seed;seen[seed]=1;
+    while(head<tail){const at=queue[head++],x=at%width,y=Math.floor(at/width);
+      for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+        if(!dx&&!dy)continue;const xx=x+dx,yy=y+dy;if(xx<0||xx>=width||yy<0||yy>=height)continue;
+        const next=yy*width+xx;if(!seen[next]&&rgba[next*4+3]>=12){seen[next]=1;queue[tail++]=next;}
+      }
+    }
+    if(tail<minimum)for(let i=0;i<tail;i++)rgba[queue[i]*4+3]=0;
+  }
   return rgba;
 }
-if(typeof window!=='undefined') window.POCKETCUT_MASK_SOURCE=maskBoxMean.toString()+';'+refineMaskAlpha.toString()+';';
+if(typeof window!=='undefined') window.POCKETCUT_MASK_SOURCE=maskBoxMean.toString()+';'+cleanMaskIslands.toString()+';'+refineMaskAlpha.toString()+';';

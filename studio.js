@@ -1,11 +1,12 @@
 'use strict';
-document.getElementById('toggle-ai').addEventListener('click',()=>{
+document.getElementById('toggle-ai').addEventListener('click',async()=>{
   const clip=state.timeline.find(c=>c.id===state.activeClipId);
   if(!clip || clip.type!=='video') return showToast('Sélectionnez un clip vidéo.');
   pausePlayback();
   clip.aiBackgroundRemoval=!clip.aiBackgroundRemoval;
   greenScreenProcessor.frames.delete(clip.id);
   pushState(); renderTimeline(); renderCanvasFrame();
+  if(clip.aiBackgroundRemoval)try{await primeClipCutout(clip);}catch(e){showToast('Détourage : '+e.message);}
   showToast(clip.aiBackgroundRemoval?'Détourage activé.':'Détourage désactivé.');
 });
 for(const id of ['ai-threshold','ai-softness','ai-quality']) document.getElementById(id).addEventListener('input',()=>{

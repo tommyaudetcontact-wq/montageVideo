@@ -1,3 +1,6 @@
+function clipTrack(c){return c.trackIndex ?? c.zIndex ?? 0;}
+function findImportedMedia(file){return state.mediaFiles.find(m=>m.file?.name===file.name&&m.file?.size===file.size&&m.file?.lastModified===file.lastModified);}
+function nextPipTrack(){const used=new Set(state.timeline.map(clipTrack));for(let i=1;i<=6;i++)if(!used.has(i))return i;return Math.max(6,...used)+1;}
 let PIXELS_PER_SECOND = 40;
 let videoImportQueue=Promise.resolve();
 const pendingMediaImports=new Set();
@@ -89,16 +92,17 @@ function updateTimelinePaddings() {
 window.addEventListener('resize', updateTimelinePaddings);
 
 function recalculateTimelinePositions() {
-  const zIndices = [...new Set(state.timeline.map(c => c.zIndex || 0))].sort((a, b) => a - b);
+  const zIndices = [...new Set(state.timeline.map(c => clipTrack(c)))].sort((a, b) => a - b);
 
   zIndices.forEach(zIndex => {
     const layerClips = state.timeline
-      .filter(c => (c.zIndex || 0) === zIndex)
+      .filter(c => clipTrack(c) === zIndex)
       .sort((a, b) => (a.timelineStart || 0) - (b.timelineStart || 0));
 
     let accumulatedStart = 0;
     layerClips.forEach(clip => {
       if (zIndex !== 0) return;
+      if(clip.animationStart!==undefined)clip.animationStart+=accumulatedStart-(clip.timelineStart||0);
       clip.timelineStart = accumulatedStart;
       const duration = clip.endTime - clip.startTime;
       accumulatedStart += duration;
@@ -107,6 +111,7 @@ function recalculateTimelinePositions() {
 }
 
 function pushState() {
+  window.syncSceneEdits?.();
   if(typeof clipPlayers!=='undefined') clipPlayers.forEach((v,id)=>{
     if(!state.timeline.some(c=>c.id===id)){v.pause();v.removeAttribute('src');v.load();clipPlayers.delete(id);greenScreenProcessor.frames.delete(id);greenScreenProcessor.previewSurfaces.delete(id);}
   });
@@ -146,6 +151,7 @@ function restoreState(jsonString) {
   state.timeline = saved.timeline;
   state.groups = saved.groups || {};
   state.projectWidth=saved.projectWidth||720;state.projectHeight=saved.projectHeight||1280;
+  window.SceneEngine?.upgrade();
   mainCanvas.width=state.projectWidth;mainCanvas.height=state.projectHeight;
   document.querySelector('.player-wrapper').style.aspectRatio=`${state.projectWidth}/${state.projectHeight}`;
   const format=state.projectWidth===720?'9:16':state.projectWidth===1280?'1:1':state.projectWidth>1280?'16:9':'4:5';
@@ -171,7 +177,7 @@ function renderCanvasFrame() {
   canvasCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
   const previewTime=Math.min(state.currentTime,Math.max(0,getTotalDuration()-0.000001));
 
-  const activeClips = state.timeline
+  const activeClips = (window.SceneEngine?SceneEngine.expand(state.timeline):state.timeline)
     .filter(clip => {
       const clipStart = clip.timelineStart || 0;
       const clipDur = clip.endTime - clip.startTime;
@@ -189,14 +195,16 @@ function renderCanvasFrame() {
     }
   });
 
+  greenScreenProcessor.awaitingCutout=false;
   const usedPlayers=new Set(),syncedPlayers=new Set();
   activeClips.forEach(clip => {
+    if(clip.hideVisual)return;
     const media = state.mediaFiles.find(m => m.id === clip.mediaId);
     if (!media || !media.element) return;
 
     const clipStart = clip.timelineStart || 0;
     const progress = previewTime - clipStart;
-    const targetTime = clip.startTime + progress;
+    const targetTime = window.SceneEngine?SceneEngine.sourceTime(clip,previewTime):clip.startTime+progress;
 
     if (clip.type === 'image') {
       greenScreenProcessor.drawClipToCanvas(canvasCtx, media.element, clip, false);
@@ -204,14 +212,15 @@ function renderCanvasFrame() {
       const owner=getPreviewOwner(clip,activeClips);
       const vid=getClipVideo(owner,media);usedPlayers.add(vid);
       if(!syncedPlayers.has(vid)) {
-      syncedPlayers.add(vid);vid.muted=!!media.audioBuffer || !!owner.muted;
+      syncedPlayers.add(vid);vid.muted=true;
 
       // RECALAGE AUDIO/VIDÉO NON-DESTRUCTIF : On ajuste currentTime seulement lors d'un gros décalage ou en pause
       if ((!state.isPlaying && Math.abs(vid.currentTime - targetTime) > 0.015) || Math.abs(vid.currentTime - targetTime) > 0.4) {
         vid.currentTime = targetTime;
       }
 
-      if (state.isPlaying && vid.paused) {
+      if(clip.freezeAt!=null)vid.pause();
+      if (state.isPlaying && vid.paused && clip.freezeAt==null) {
         vid.play().catch(() => {});
       }
 
@@ -219,7 +228,10 @@ function renderCanvasFrame() {
       greenScreenProcessor.drawClipToCanvas(canvasCtx, vid, clip, !!clip.aiBackgroundRemoval);
     }
   });
-  clipPlayers.forEach(v=>{if(!usedPlayers.has(v))v.pause();});
+  for(const [id,v] of clipPlayers)if(!usedPlayers.has(v)){v.pause();if(clipPlayers.size>4){v.removeAttribute('src');v.load();clipPlayers.delete(id);greenScreenProcessor.previewSurfaces.delete(id);greenScreenProcessor.frames.delete(id);}}
+  window.syncPreviewAudio?.(activeClips,previewTime);
+  window.drawWorkspaceSnap?.();
+  const badge=document.getElementById('cutout-loading-badge');if(badge){badge.hidden=!greenScreenProcessor.awaitingCutout;badge.textContent=greenScreenProcessor.failure?'IA indisponible · Réessayer IA':'Détourage en préparation…';}
   window.CropTools?.refresh();
 }
 
@@ -241,35 +253,26 @@ async function startPlayback(options={}) {
   if(window.refreshAnimationPanel)refreshAnimationPanel();
   if(playText)playText.textContent='Préparation…';
   try {
-    await prepareProjectAudio();if(request!==playbackRequest)return;
-    const cutouts=state.timeline.filter(c=>c.aiBackgroundRemoval && (!options.stopAt || ((c.timelineStart||0)<options.stopAt && (c.timelineStart||0)+c.endTime-c.startTime>state.currentTime)));
-    for(let i=0;i<cutouts.length;i++) {
-      await PocketCutMasks.ensure(cutouts[i],{cancelled:()=>request!==playbackRequest,onProgress:({progress})=>{if(playText)playText.textContent=`Préparation ${i+1}/${cutouts.length} · ${Math.round(progress*100)} %`;}});
-      if(request!==playbackRequest)return;
-    }
-    const active=state.timeline.filter(c=>state.currentTime>=(c.timelineStart||0)&&state.currentTime<(c.timelineStart||0)+c.endTime-c.startTime);
-    const synced=new Set();
-    for(const clip of active.filter(c=>c.type==='video')) {
+    const active=(window.SceneEngine?SceneEngine.expand(state.timeline):state.timeline).filter(c=>state.currentTime>=(c.timelineStart||0)&&state.currentTime<(c.timelineStart||0)+c.endTime-c.startTime);
+    const synced=new Set(),frozenPlayers=new Set();
+    for(const clip of active.filter(c=>c.type==='video'&&!c.hideVisual)) {
       const media=state.mediaFiles.find(m=>m.id===clip.mediaId),owner=getPreviewOwner(clip,active),v=getClipVideo(owner,media);
       if(!synced.has(v)) {
-        synced.add(v);v.pause();v.muted=!!media.audioBuffer || !!owner.muted;
-        await waitForPreviewData(v);await seekVideo(v,clip.startTime+state.currentTime-(clip.timelineStart||0));
+        synced.add(v);v.pause();v.muted=true;
+        await waitForPreviewData(v);await seekVideo(v,(window.SceneEngine?SceneEngine.sourceTime(clip,state.currentTime):clip.startTime+state.currentTime-(clip.timelineStart||0)));
       }
-      if(clip.aiBackgroundRemoval && !greenScreenProcessor.failure) {
-        await PocketCutMasks.ensure(clip,{cancelled:()=>request!==playbackRequest,onProgress:({progress})=>{if(playText)playText.textContent=`Préparation ${Math.round(progress*100)} %`;}});
-        await greenScreenProcessor.queue.catch(()=>{});
-        const cached=greenScreenProcessor.frames.get(clip.id);
-        if(!cached || Math.abs(cached.time-v.currentTime)>0.025)await greenScreenProcessor.prepareFrame(v,clip);
-      }
+      if(clip.freezeAt!=null)frozenPlayers.add(v);
+      if(request!==playbackRequest)return;
+      if(clip.aiBackgroundRemoval)await greenScreenProcessor.prepareFrame(v,clip,{draft:true,time:(window.SceneEngine?SceneEngine.sourceTime(clip,state.currentTime):clip.startTime+state.currentTime-(clip.timelineStart||0))});
       if(request!==playbackRequest)return;
     }
     if(request!==playbackRequest)return;
     state.isPlaying=true;playbackTimestamp=null;
     if(playIcon)playIcon.className='bi bi-pause-fill fs-6';if(playText)playText.textContent='Pause';
     // All readers begin together after the first mask is ready.
-    await Promise.all([...synced].map(v=>v.play().catch(()=>{})));
+    await Promise.all([...synced].filter(v=>!frozenPlayers.has(v)).map(v=>v.play().catch(()=>{})));
     if(request!==playbackRequest)return;
-    startProjectAudio(state.currentTime);playbackTimestamp=performance.now();
+    window.syncPreviewAudio?.(active,state.currentTime);playbackTimestamp=performance.now();
     if(animFrameId)cancelAnimationFrame(animFrameId);animFrameId=requestAnimationFrame(playbackLoop);
   } catch(e) {if(request===playbackRequest){pausePlayback();showToast(e.message);}}
   finally {if(request===playbackRequest)isStartingPlayback=false;}
@@ -290,7 +293,7 @@ function waitForPreviewData(v) {
 }
 
 function pausePlayback() {
-  if(typeof stopProjectAudio==='function')stopProjectAudio();
+  if(typeof stopProjectAudio==='function')stopProjectAudio();window.stopPreviewAudio?.();
   playbackRequest++;isStartingPlayback=false;state.previewStopTime=null;state.previewRestartTime=0;
   state.isPlaying = false;
   if (playIcon) playIcon.className = "bi bi-play-fill fs-6";
@@ -351,7 +354,8 @@ if (btnDuplicatePipAi) {
     const newPip = {
       ...JSON.parse(JSON.stringify(activeClip)),
       id: 'clip_' + Math.random().toString(36).substr(2, 9),
-      zIndex: maxZ + 1,
+      zIndex: Math.max(0,...state.timeline.map(c=>c.zIndex||0))+1,
+      trackIndex: nextPipTrack(),
       muted: true, // Le double est mâté par défaut pour éviter l'écho
       aiBackgroundRemoval: true,
       ...fullHeightPose(activeClip.baseWidth,activeClip.baseHeight),
@@ -360,6 +364,7 @@ if (btnDuplicatePipAi) {
       crop: { top: 0, bottom: 0, left: 0, right: 0 }, cropRatio:'free'
     };
 
+    delete newPip.scene;
     state.timeline.push(newPip);
     state.activeClipId = newPip.id;
 
@@ -367,7 +372,7 @@ if (btnDuplicatePipAi) {
     renderTimeline();
     renderCanvasFrame();
     greenScreenProcessor.updateSlidersUI(newPip);
-    showToast("PIP avec découpe IA ajouté !");
+    window.primeClipCutout?.(newPip).catch(e=>showToast(e.message));showToast("PIP avec découpe IA ajouté !");
   });
 }
 
@@ -383,64 +388,24 @@ if (btnMute) {
   });
 }
 
-// INVERSION RELATIVE DES CALQUES
-if (btnLayerUp) {
-  btnLayerUp.addEventListener('click', () => {
-    const activeClip = state.timeline.find(c => c.id === state.activeClipId);
-    if (!activeClip) return;
-
-    const currentZ = activeClip.zIndex || 0;
-    const sortedZ = [...new Set(state.timeline.map(c => c.zIndex || 0))].sort((a, b) => a - b);
-    const currentIndex = sortedZ.indexOf(currentZ);
-
-    if (currentIndex < sortedZ.length - 1) {
-      const targetZ = sortedZ[currentIndex + 1];
-      state.timeline.forEach(c => {
-        if ((c.zIndex || 0) === targetZ) c.zIndex = currentZ;
-        else if (c.id === activeClip.id) c.zIndex = targetZ;
-      });
-      pushState();
-      renderTimeline();
-      renderCanvasFrame();
-    }
-  });
-}
-
-if (btnLayerDown) {
-  btnLayerDown.addEventListener('click', () => {
-    const activeClip = state.timeline.find(c => c.id === state.activeClipId);
-    if (!activeClip) return;
-
-    const currentZ = activeClip.zIndex || 0;
-    const sortedZ = [...new Set(state.timeline.map(c => c.zIndex || 0))].sort((a, b) => a - b);
-    const currentIndex = sortedZ.indexOf(currentZ);
-
-    if (currentIndex > 0) {
-      const targetZ = sortedZ[currentIndex - 1];
-      state.timeline.forEach(c => {
-        if ((c.zIndex || 0) === targetZ) c.zIndex = currentZ;
-        else if (c.id === activeClip.id) c.zIndex = targetZ;
-      });
-      pushState();
-      renderTimeline();
-      renderCanvasFrame();
-    }
-  });
-}
-
+// Visual layer controls are registered in blades.js and montage-tools.js.
 function renderTimeline() {
   if (!timelineTrack) return;
   timelineTrack.innerHTML = '';
+  window.renderSceneStrip?.();
+  document.body.classList.toggle('v2-has-secondary',state.timeline.some(c=>clipTrack(c)>0));
   updateTimelinePaddings();
 
-  const zIndices = [...new Set(state.timeline.map(c => c.zIndex || 0))].sort((a, b) => a - b);
-  if (zIndices.length === 0) zIndices.push(0);
+  const highest=Math.max(6,...state.timeline.map(c=>clipTrack(c)));
+  const zIndices=Array.from({length:highest+1},(_,i)=>i).reverse();
 
   zIndices.forEach(zIndex => {
     const row = document.createElement('div');
-    row.className = 'timeline-layer-row';
+    row.className = 'timeline-layer-row';row.dataset.zIndex=zIndex;
+    const rowLabel=document.createElement('span');rowLabel.className='timeline-row-label';rowLabel.textContent=zIndex===0?'Principale':'B-roll '+zIndex;row.appendChild(rowLabel);
 
-    const clipsInLayer = state.timeline.filter(c => (c.zIndex || 0) === zIndex);
+    const clipsInLayer = state.timeline.filter(c => clipTrack(c) === zIndex);
+    row.classList.toggle('empty-secondary',zIndex>0&&!clipsInLayer.length);
 
     const shownGroups=new Set();
     clipsInLayer.forEach(clip => {
@@ -458,43 +423,43 @@ function renderTimeline() {
 
       const wrapper = document.createElement('div');
       wrapper.className = 'clip-wrapper'+(selected?' selected':'');
-      wrapper.dataset.clipId=clip.id;
+      wrapper.dataset.clipId=clip.id;wrapper.draggable=false;wrapper.setAttribute('role','button');wrapper.tabIndex=0;
       wrapper.style.width = `${clipWidth}px`;
       wrapper.style.left = `${leftPos}px`;
 
       const clipEl = document.createElement('div');
-      clipEl.className = `timeline-clip ${selected ? 'active' : ''} ${clip.zIndex > 0 ? 'pip-mode' : ''}`;
+      clipEl.className = `timeline-clip ${selected ? 'active' : ''} ${clipTrack(clip) > 0 ? 'pip-mode' : ''}`;
       clipEl.dataset.id = clip.id;
 
       const thumbContainer = document.createElement('div');
       thumbContainer.className = 'clip-thumbnails-container';
-      if (media && media.thumbnails) {
-        const thumbnails=members.flatMap(c=>state.mediaFiles.find(m=>m.id===c.mediaId)?.thumbnails||[]);
+      if (media) {
+        const thumbnails=members.flatMap(c=>{const m=state.mediaFiles.find(m=>m.id===c.mediaId);return m?.type==='image'?[m.url]:m?.thumbnails||[];});
         thumbnails.forEach(src => {
           const img = document.createElement('img');
           img.src = src;
-          img.className = 'clip-thumb';
+          img.className = 'clip-thumb';img.draggable=false;
           thumbContainer.appendChild(img);
         });
       }
 
       const canvasWave = document.createElement('canvas');
       canvasWave.className = 'clip-waveform';
-      canvasWave.width = clipWidth;
+      canvasWave.width = Math.max(1,Math.min(2048,Math.ceil(clipWidth)));
       canvasWave.height = 20;
-      if (media && (media.audioBuffer||media.waveformPreview)) {
+      if (members.some(c=>{const m=state.mediaFiles.find(x=>x.id===c.mediaId);return m&&(m.audioBuffer||m.waveformPreview);})) {
         if(!sequence)drawWaveform(canvasWave, media.audioBuffer||media.waveformPreview, clip.startTime, clip.endTime);
         else for(const member of members){
           const m=state.mediaFiles.find(x=>x.id===member.mediaId);if(!m?.audioBuffer&&!m?.waveformPreview)continue;
-          const part=document.createElement('canvas');part.width=Math.max(1,Math.round((member.endTime-member.startTime)*PIXELS_PER_SECOND));part.height=20;
-          drawWaveform(part,m.audioBuffer||m.waveformPreview,member.startTime,member.endTime);canvasWave.getContext('2d').drawImage(part,(member.timelineStart-clip.timelineStart)*PIXELS_PER_SECOND,0);
+          const part=document.createElement('canvas');part.width=Math.max(1,Math.min(2048,Math.round((member.endTime-member.startTime)*PIXELS_PER_SECOND)));part.height=20;
+          drawWaveform(part,m.audioBuffer||m.waveformPreview,member.startTime,member.endTime);canvasWave.getContext('2d').drawImage(part,(member.timelineStart-clip.timelineStart)*PIXELS_PER_SECOND*canvasWave.width/Math.max(1,clipWidth),0,(member.endTime-member.startTime)*PIXELS_PER_SECOND*canvasWave.width/Math.max(1,clipWidth),20);
         }
       }
 
-      const label = (media?.file?.name || 'Clip').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      const label = (clip.label || media?.file?.name || 'Clip').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
       clipEl.innerHTML = `
         <div class="p-1 text-truncate text-white fw-semibold" style="font-size: 0.6rem; z-index: 10;">
-          L${clip.zIndex || 0} ${clip.groupId ? '[G]' : ''} ${clip.keyframes?.length ? '◆' : ''} ${clip.aiBackgroundRemoval ? '[IA]' : ''} ${clip.muted ? '[MUTE]' : ''} ${label}
+          P${clipTrack(clip)} ${clip.scene ? '[SCÈNE]' : ''} ${clip.groupId ? '[G]' : ''} ${clip.keyframes?.length ? '◆' : ''} ${clip.aiBackgroundRemoval ? '[IA]' : ''} ${clip.muted ? '[MUTE]' : ''} ${label}
         </div>
       `;
 
@@ -529,6 +494,7 @@ function renderTimeline() {
       wrapper.addEventListener('click', (e) => {
         if (e.target.classList.contains('trim-handle') || window.timelineDragged) return;
         if(window.pickFusionClip?.(clip))return;
+        if(window.pickMultiClip?.(clip))return;
         state.activeClipId = clip.id;
         state.editPoseClipId = null;
         if(window.refreshAnimationPanel) refreshAnimationPanel();
@@ -546,8 +512,11 @@ function renderTimeline() {
   });
 
   setupTrimEvents();
+  window.paintMultiSelection?.();
   window.setupKeyframeMarkers?.();
   updateTimelinePaddings();
+  window.paintMultiSelection?.();
+  if(!window.clipReorderActive)window.revealSelectedLayer?.();
   updateTimecode();
 }
 
@@ -619,7 +588,7 @@ if (snapToggleBtn) {
     snapToggleBtn.classList.toggle('btn-outline-info', !state.isSnapping);
     snapToggleBtn.setAttribute('aria-pressed',String(state.isSnapping));
     window.PocketCutSession?.schedule();
-    showToast(`Aimant vocal ${state.isSnapping ? 'activé' : 'désactivé'}`);
+    showToast(`Aimant timeline ${state.isSnapping ? 'activé' : 'désactivé'}`);
   });
 }
 
@@ -632,28 +601,27 @@ function findNearestSpeechSnapPoint(bounds, targetTime, thresholdSeconds = 0.40)
 
 function syncMediaStatus() {
   state.mediaFiles.forEach(m => {
-    m.used = state.timeline.some(c => c.mediaId === m.id);
+    m.used = state.timeline.some(c => c.mediaId === m.id||c.scene?.visualMediaId===m.id);
   });
 }
 
-if (videoInput) {
-  videoInput.addEventListener('change', (e) => {
-    const files = Array.from(e.target.files).sort((a,b)=>{
+function importVideoFiles(inputFiles,asPip=false) {
+    const files = Array.from(inputFiles).sort((a,b)=>{
       const dateA=Number.isFinite(a.lastModified)&&a.lastModified>0?a.lastModified:Infinity;
       const dateB=Number.isFinite(b.lastModified)&&b.lastModified>0?b.lastModified:Infinity;
       return dateA===dateB?0:dateA-dateB;
     });
-    e.target.value='';
     if (files.length === 0) return;
 
     files.forEach((file) => {
       const importToken={};pendingMediaImports.add(importToken);
       videoImportQueue=videoImportQueue.then(()=>new Promise(resolveImport=>{
+      const existing=findImportedMedia(file);if(existing){addMediaToTimeline(existing.id,asPip);showToast('✓ Déjà importé · source réutilisée.');pendingMediaImports.delete(importToken);resolveImport();return;}
       const id = 'vid_' + Math.random().toString(36).substr(2, 9);
       const url = URL.createObjectURL(file);
       const vid = document.createElement('video');
       vid.src = url;
-      vid.playsInline = true;
+      vid.playsInline = true;vid.preload="metadata";vid.muted=true;
 
       showToast(`Importation de ${file.name}...`);
 
@@ -661,26 +629,11 @@ if (videoInput) {
       vid.onloadedmetadata = async () => {
         try{
         let videoDuration=vid.duration;
-        try {
-          const B=await loadMediaLibrary();
-          const input=new B.Input({source:new B.BlobSource(file),formats:B.ALL_FORMATS});
-          try {const track=await input.getPrimaryVideoTrack(); if(track) videoDuration=(await track.computeDuration())-(await track.getFirstTimestamp());}
-          finally {input.dispose();}
-        } catch(e) {console.warn('Métadonnées vidéo :',e.message);}
-        let audioBuffer = null;
-        let speechBounds = [];
-
-        try {
-          const arrayBuffer = await file.arrayBuffer();
-          const ctx = getAudioContext();
-          audioBuffer = await ctx.decodeAudioData(arrayBuffer);
-          speechBounds = extractAllSpeechBounds(audioBuffer);
-        } catch (err) {
-          console.warn("Analyse audio ignorée:", err);
+        if(!Number.isFinite(videoDuration)||videoDuration<=0){
+          const B=await loadMediaLibrary(),input=new B.Input({source:new B.BlobSource(file),formats:B.ALL_FORMATS});
+          try{const track=await input.getPrimaryVideoTrack();videoDuration=(await track.computeDuration())-(await track.getFirstTimestamp());}finally{input.dispose();}
         }
-
-        const thumbnails = await generateThumbnails(url);
-
+        const audioBuffer=null,speechBounds=[],thumbnails=[];
         state.mediaFiles.push({
           id,
           file,
@@ -700,11 +653,12 @@ if (videoInput) {
           type: 'video',
           startTime: 0,
           endTime: Number.isFinite(videoDuration) && videoDuration>0 ? videoDuration : 10,
-          timelineStart: primaryTrackEnd(),
-          zIndex: 0,
+          timelineStart: asPip ? state.currentTime : primaryTrackEnd(),
+          trackIndex: asPip ? nextPipTrack() : 0,
+          zIndex: asPip ? Math.max(0,...state.timeline.map(c=>c.zIndex||0))+1 : 0,
           muted: false,
           aiBackgroundRemoval: false,
-          ...fitMedia(vid.videoWidth, vid.videoHeight)
+          ...(asPip?fullHeightPose(vid.videoWidth,vid.videoHeight):fitMedia(vid.videoWidth,vid.videoHeight))
         };
 
         state.timeline.push(newClip);
@@ -716,17 +670,22 @@ if (videoInput) {
         renderTimeline();
         renderCanvasFrame();
         pushState();
-        showToast("Vidéo ajoutée !");
-        }catch(e){showToast("Importation : "+e.message);}finally{pendingMediaImports.delete(importToken);await window.PocketCutSession?.flush();resolveImport();}
+        window.scheduleMediaVisuals?.();showToast("Vidéo ajoutée !");
+        }catch(e){showToast("Importation : "+e.message);}finally{pendingMediaImports.delete(importToken);resolveImport();}
       };
       })).catch(e=>{pendingMediaImports.delete(importToken);showToast("Importation : "+e.message);});
     });
-  });
 }
+if(videoInput)videoInput.addEventListener('change',e=>{importVideoFiles(e.target.files);e.target.value='';});
 
 if (imagePipInput) {
   imagePipInput.addEventListener('change', (e) => {
-    const file = e.target.files[0];
+    const picked=Array.from(e.target.files);
+    importVideoFiles(picked.filter(f=>f.type.startsWith('video/')),true);
+    const files=picked.filter(f=>!f.type.startsWith('video/'));
+    e.target.value='';
+    for(const file of files){
+    const existing=findImportedMedia(file);if(existing){addMediaToTimeline(existing.id,true);showToast('✓ Déjà importé · source réutilisée.');continue;}
     if (!file) return;
     e.target.value='';
 
@@ -750,6 +709,7 @@ if (imagePipInput) {
         endTime: getTotalDuration()>state.currentTime ? getTotalDuration()-state.currentTime : 5,
         timelineStart: state.currentTime,
         zIndex: maxZ + 1,
+        trackIndex: nextPipTrack(),
         muted: true,
         ...fullHeightPose(img.naturalWidth,img.naturalHeight)
       };
@@ -764,6 +724,7 @@ if (imagePipInput) {
       greenScreenProcessor.updateSlidersUI(newClip);
       showToast("Image PIP ajoutée.");
     };
+    }
   });
 }
 
@@ -806,7 +767,7 @@ function renderMediaLibrary() {
     const card = document.createElement('div');
     card.className = `media-card ${media.used ? 'used' : ''}`;
     card.innerHTML = `
-      ${media.type==='image'?`<img src="${media.url}" class="w-100 h-100" style="object-fit:cover" alt="Image importée">`:`<video src="${media.url}" class="w-100 h-100" style="object-fit:cover" muted playsinline></video>`}
+      ${media.type==='image'?`<img src="${media.url}" class="w-100 h-100" style="object-fit:cover" alt="Image importée">`:`<span class="media-video-label">▶</span>`}
       ${media.used ? `<div class="badge-used text-white"><i class="bi bi-check-circle-fill fs-6 mb-1"></i> PRIS</div>` : ''}
     `;
     card.addEventListener('click', () => addMediaToTimeline(media.id));
@@ -814,7 +775,7 @@ function renderMediaLibrary() {
   });
 }
 
-function addMediaToTimeline(mediaId) {
+function addMediaToTimeline(mediaId,asPip=false) {
   const media = state.mediaFiles.find(m => m.id === mediaId);
   if (!media || !media.element) return;
 
@@ -825,8 +786,9 @@ function addMediaToTimeline(mediaId) {
     type: media.type,
     startTime: 0,
     endTime: fullDuration,
-    timelineStart: media.type === 'image' ? state.currentTime : primaryTrackEnd(),
-    zIndex: media.type === 'image' ? Math.max(0,...state.timeline.map(c=>c.zIndex))+1 : 0,
+    timelineStart: media.type === 'image'||asPip ? state.currentTime : primaryTrackEnd(),
+    trackIndex: media.type === 'image'||asPip ? nextPipTrack() : 0,
+    zIndex: media.type === 'image'||asPip ? Math.max(0,...state.timeline.map(c=>c.zIndex||0))+1 : 0,
     muted: false,
     ...fullHeightPose(media.element.videoWidth || media.element.naturalWidth,media.element.videoHeight || media.element.naturalHeight)
   };
@@ -849,7 +811,7 @@ function drawWaveform(canvas, audioBuffer, startTime, endTime) {
   const height = canvas.height;
   
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = 'rgba(59, 130, 246, 0.75)';
+  ctx.fillStyle = '#66ffe4';
 
   const channelData = audioBuffer.getChannelData(0);
   const sampleRate = audioBuffer.sampleRate;
@@ -897,16 +859,6 @@ if (btnSplit) {
       const left = { ...orig, id: 'clip_' + Math.random().toString(36).substr(2, 9), endTime: splitTime };
       const right = { ...orig, id: 'clip_' + Math.random().toString(36).substr(2, 9), startTime: splitTime, timelineStart: state.currentTime };
       retainSplitAnimation(orig,left,right);
-      if(state.isSnapping) {
-        const bounds=state.mediaFiles.find(m=>m.id===orig.mediaId)?.speechBounds||[];
-        if(!bounds.some(b=>b.start<splitTime&&b.end>splitTime)) {
-          const before=bounds.filter(b=>b.end<=splitTime&&b.end>orig.startTime).at(-1);
-          const after=bounds.find(b=>b.start>=splitTime&&b.start<orig.endTime);
-          if(before)left.endTime=before.end;
-          if(after)right.startTime=after.start;
-          right.timelineStart=left.timelineStart+left.endTime-left.startTime;
-        }
-      }
       state.activeClipId=right.id;
 
       const currentScroll = timelineScrollContainer ? timelineScrollContainer.scrollLeft : 0;
@@ -923,48 +875,7 @@ if (btnSplit) {
   });
 }
 
-if (btnAutoCutClip) {
-  btnAutoCutClip.addEventListener('click', async () => {
-    const activeClip = state.timeline.find(c => c.id === state.activeClipId);
-    if (!activeClip) return showToast("Sélectionnez un clip d'abord.");
-
-    const media = state.mediaFiles.find(m => m.id === activeClip.mediaId);
-    if (!media) return showToast("Piste audio indisponible.");
-
-    btnAutoCutClip.disabled = true;
-    btnAutoCutClip.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span> Cut...`;
-
-    try {
-      if(!media.speechBounds?.length){
-        if(!media.audioBuffer)await prepareProjectAudio([media.id]);
-        if(!media.audioBuffer)return showToast('Piste audio indisponible.');
-        media.speechBounds=extractAllSpeechBounds(media.audioBuffer);
-      }
-      const bounds = media.speechBounds.filter(s => s.end > activeClip.startTime && s.start < activeClip.endTime);
-      
-      if (bounds.length > 0) {
-        const lastTake = bounds[bounds.length - 1];
-        activeClip.startTime = Math.max(activeClip.startTime, lastTake.start);
-        activeClip.endTime = Math.min(activeClip.endTime, lastTake.end);
-        
-        recalculateTimelinePositions();
-        
-        const currentScroll = timelineScrollContainer ? timelineScrollContainer.scrollLeft : 0;
-        renderTimeline();
-        if (timelineScrollContainer) timelineScrollContainer.scrollLeft = currentScroll;
-        pushState();
-        showToast("AutoCut appliqué !");
-      } else {
-        showToast("Aucune phrase vocale distincte trouvée.");
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      btnAutoCutClip.disabled = false;
-      btnAutoCutClip.innerHTML = `<i class="bi bi-magic me-1"></i> AutoCut`;
-    }
-  });
-}
+if(btnAutoCutClip)btnAutoCutClip.addEventListener('click',()=>window.runAutoCut?.(window.editTargets?.()||[]));
 
 if (btnDelete) {
   btnDelete.addEventListener('click', () => {
@@ -994,6 +905,7 @@ function getClipVideo(clip, media) {
     const v = document.createElement('video');
     v.src = media.url; v.playsInline = true; v.preload = 'auto';
     clipPlayers.set(clip.id, v);
+    if(v.requestVideoFrameCallback){const trackFrame=(now,metadata)=>{v.pocketFrameTime=metadata.mediaTime;if(clipPlayers.get(clip.id)===v)v.requestVideoFrameCallback(trackFrame);};v.requestVideoFrameCallback(trackFrame);}v.addEventListener('seeking',()=>{delete v.pocketFrameTime;});
     v.addEventListener('seeked', () => { if (!state.isPlaying && !exporting) renderCanvasFrame(); });
     v.addEventListener('loadeddata', () => { if (!exporting) renderCanvasFrame(); });
   }
@@ -1048,4 +960,4 @@ function fitMedia(w,h,maxW=workspaceWidth(),maxH=workspaceHeight()) {
 
 new ResizeObserver(updateTimelinePaddings).observe(timelineScrollContainer);
 
-function primaryTrackEnd(){return Math.max(0,...state.timeline.filter(c=>(c.zIndex||0)===0).map(c=>(c.timelineStart||0)+c.endTime-c.startTime));}
+function primaryTrackEnd(){return Math.max(0,...state.timeline.filter(c=>clipTrack(c)===0).map(c=>(c.timelineStart||0)+c.endTime-c.startTime));}

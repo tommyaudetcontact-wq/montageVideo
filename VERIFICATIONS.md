@@ -1,47 +1,43 @@
-# Vérifications · 15 octobre 2026
+# Vérifications — PocketCut Studio V2
 
-Les essais utilisent des médias synthétiques locaux et un navigateur de bureau. Aucun fichier personnel n’a été transmis.
+## Montage par scènes
 
-- Tests purs : interpolation des keyframes, rotation la plus courte, zoom continu de groupe, pop-up, pleine hauteur, continuité de division, filtrage des bords ; cache et plages natives réutilisées.
-- Tests audio purs : programmation de lecture et mix export, avance/retard, gain, bornes du média découpé, saturation et mute.
-- Test navigateur à 390 × 844 : clic Animation applique 0,25 s ; trajectoire à 45° suit la rotation ; maintien PIP ouvre la fenêtre sans dupliquer ; gain 200 % ; avance audio −0,2 s ; mix audio vérifié avec une rampe pour contrôler la position source et le gain.
-- Fusion par sélection timeline en une capsule, auto-keyframes immédiat sur le groupe, division avec suppression du silence, poignées uniquement sur la sélection et extérieures à la durée visible.
-- Passage carré / vertical et annulation/rétablissement ; glissement de timeline de 60 s jusqu’à son extrémité exacte.
-- Export réel puis redécodage du MP4 fusionné : 720 × 1280, 18 images pour 0,6 s à 30 i/s, horodatages strictement croissants. Aucune erreur JavaScript dans le scénario.
-- Benchmark à qualité identique, 30 masques pour 30 images natives : trois essais de 45 à 59 % de temps en moins (médiane 58 %, modèles chargés). Le test synthétique mesure le pipeline ; il ne valide pas l’esthétique des cheveux sur une vraie personne ni les performances d’un téléphone physique.
+- Tests unitaires du moteur : création d’une scène dans une plage partielle, division aux limites, une seule narration canonique, illustration dérivée sans copie de média.
+- Nettoyage intérieur : voix et sujet conservent les mêmes temps source ; l’illustration vidéo saute les mêmes portions supprimées. Le zoom et le pop-up restent continus sur les morceaux d’une scène.
+- Modifications de pose partagées entre morceaux liés, remplacement d’une partie avec une nouvelle identité de scène, continuité optionnelle entre PIP voisins de même pose, zoom distinct de chaque fond.
+- Compositions sans fichier média imposé, pose/keyframes normalisées à la durée, rétablissement du rendu face caméra, cadrage de l’écran partagé.
+- Fonds vidéo : segments bouclés dans la durée source et gel final silencieux. Test navigateur supplémentaire : gel réellement immobile pendant la lecture (lecteur vidéo en pause au temps source fixé), boucle avec temps source valide et aperçu synchronisé.
 
-Sources des tests reproductibles conservées dans le dossier work de l’espace de travail (non déployées). Interface inspectée par capture mobile. Site statique, aucune compilation ni serveur d’application nécessaire en production.
+## Test navigateur de bout en bout
 
-## Sauvegarde, préréglages et gestes · version 15
+Vidéo de contrôle de 4 s (360 × 640, 30 images/s), audio synthétique avec deux plages sonores et des silences, image issue localement de la référence fournie. Modèle de segmentation réel, aucune vidéo envoyée à un service d’analyse.
 
-- Tests purs des préréglages : noms, temps proportionnels sur clips plus courts/plus longs, géométrie proportionnelle, durée du pop-up, indépendance des identifiants de médias, coordonnées de rotation et tolérance des keyframes.
-- Test navigateur avec une image PNG et un MP4 synthétique contenant une tonalité : sauvegarde automatique dans IndexedDB, rechargement de l’iframe, réouverture des Blobs, conservation du nombre de médias et de tout l’historique, y compris la branche Rétablir. Le test attend l’écriture automatique sans appeler la fonction de sauvegarde manuelle.
-- Préréglage nommé enregistré et retrouvé après rechargement ; application sur un clip deux fois plus court : temps de keyframe 0,5 → 0,25 s et pop-up 0,25 → 0,125 s.
-- Tap sur un masque synthétique : le sujet sélectionne le PIP ; sa moitié transparente sélectionne l’image derrière. Rotation de 90° avec deux doigts ; pinch sur la marge transparente du PIP précédemment tapé conserve ce PIP.
-- Keyframe au curseur mise en évidence ; suppression au curseur, par maintien sur la timeline et par maintien dans la liste ; annulation des suppressions.
-- Formes d’onde compactes conservées avec leurs pics de fin : test pur de couverture sur toute la largeur. Plages sonores réutilisables par AutoCut après restauration.
-- Trois outils portent le badge +. Inspection visuelle de la palette et de la disposition sur mobile. Aucune erreur JavaScript dans le scénario de vérification.
+- Import via Prises ; scène par Illustrer avec zoom 15 % et pop-up 0,25 s.
+- Lecture : un seul lecteur audio de narration.
+- Composition enregistrée puis retrouvée dans un autre projet.
+- AutoCut : proposition sans mutation, deux portions conservées et une seule scène ; annulation/rétablissement.
+- Écran partagé, retour face caméra, annulation du retour ; application de composition sur la durée raccourcie.
+- Changement de projet puis rechargement complet : scènes, médias et historique Undo retrouvés.
+- Geste pointer tactile sur les capsules : réordonnancement sans écrasement ; illustrations suivant leur narration ; Undo.
+- MP4 H.264/AAC exporté puis redécodé : 75 images attendues après nettoyage, illustration présente ; audio au niveau d’une seule voix, sans doublage.
+- Aucune erreur JavaScript observée dans ce scénario.
 
-Le contrôle des doigts utilise des PointerEvents synthétiques dans le navigateur de bureau ; aucun téléphone physique n’a été testé. La détection alpha utilise un masque déterministe pour vérifier la sélection, distinct de l’évaluation de qualité du modèle IA. Le stockage dépend du navigateur et de son quota ; les masques IA ne sont pas persistés.
+## Régressions et livraison
 
+Tests conservés de la V1 : crop, poignées/ripple, multisélection, z-index indépendant des pistes, duplication, gel, animations, préréglages, audio, waveform et cache de masques. Tous les scripts passent la vérification de syntaxe. Fichiers IA vérifiés par empreintes. Archives testées.
 
-## Version 17 · vérifications complémentaires
+Le dossier V1 est comparé octet par octet à sa dernière archive livrée et reste intact. Le stockage IndexedDB et OPFS de la V2 porte son propre préfixe.
 
-- Rognage : huit poignées, déplacement du cadre, ratio verrouillé, réinitialisation, conservation de la pose et préréglage adapté entre image et vidéo de ratios différents.
-- Aimantation : deux poignées, extrémités d’autres clips, curseur, guide, Annuler/Rétablir, Aimant désactivé et suspension Alt. Tests des limites du média et des images extensibles.
-- Export réel puis redécodage MP4 : définition conservée, centre présent, côtés rognés absents. Rognage et préréglage retrouvés après rechargement.
-- Migration d’une base version 1 : médias et historique Rétablir conservés. Deux projets nommés, retours entre projets, historiques indépendants, renommage et restauration du projet actif.
-- Fermeture explicite de la connexion IndexedDB reproduite : sauvegarde suivante réussit par réouverture automatique.
-- Chargement IA depuis assets/ai, inférence réelle et relance via Réessayer IA réussis. Profil navigateur Android simulé : un seul moteur IA.
-- Aucun téléphone Android physique testé : ces contrôles valident les mécanismes corrigés, pas tous les navigateurs ou toutes les limites mémoire des téléphones.
-- Les ressources incluses sont épinglées à MediaPipe Tasks Vision 0.10.21. Sources, tailles et empreintes SHA-256 dans assets/ai/SOURCES.json ; licence jointe.
+## Limites de validation
+
+Affichage et interactions mobiles testés dans un cadre de navigateur de 390 px sur PC. Aucun essai sur Pixel 9 physique ni projet réel de plusieurs Go dans cette livraison. La détection de silence repose sur le niveau sonore et ne reconnaît pas la meilleure prise. Le modèle de détourage conserve ses limites de segmentation. Les projets V1 ne sont pas migrés automatiquement vers la V2.
 
 
-## Version 18
+## Version 2.0.1 — corrections demandées
 
-- Trois fichiers binaires de plus de 2 Mio sauvegardés puis reconstruits ; comparaison de tous les octets réussie.
-- Écriture partiellement interrompue : aucun média incomplet publié ; reprise et relecture réussies. Média déjà enregistré : aucun bloc réécrit.
-- Import réel en une sélection de trois vidéos WebM générées pour le test : ordre conservé, sauvegarde puis rechargement des trois médias lisibles réussis.
-- Zoom −/+ avec conservation du temps, dézoom tactile simulé, déplacement poursuivi après relâchement et interruption de l’inertie.
-- Migration schema 2 vers 3 : projet actif conservé, ancien enregistrement current non dupliqué. Migration schema 1, retour entre projets, historiques et préréglages vérifiés.
-- Contrôles réalisés dans Chromium sur ordinateur, pas sur un appareil Android physique. La cause exacte sur le téléphone n’est pas confirmée ; l’écriture directe de File/Blob et les imports concurrents ont été supprimés des nouvelles sauvegardes.
+- AutoCut par défaut : un clic applique le dernier bloc parlé, avec le même calcul de bornes que la V1 (début −0,08 s, fin +0,15 s). Pas de suppression des pauses intérieures dans ce mode. Options par maintien ; Undo conservé.
+- Six placements : contrôle géométrique de la tranche coupée de la source après rotation ; elle reste hors du cadre, y compris dans les coins du haut. Référence de tête dans le cadre ; contrôle visuel des six rendus avec modèle IA réel.
+- Écran partagé : visage dans une bande de 30 %, position verticale réglable, fond dans les 70 % restants avec zoom 35 %.
+- Galerie du projet : vignettes, Ajouter, badges Déjà importé / Utilisé. Le bouton déclenche l’input natif acceptant images et vidéos. Réimport du même fichier (nom/taille/date identiques) : média réutilisé et nombre de fichiers stable.
+- Navigateur : scénario de contrôle réussi, mode classique appliqué directement et annulé ; pas d’erreur JavaScript observée. Galerie Android système non modifiable : les badges sont dans l’application.
+- Vérification de syntaxe des scripts, tests du moteur de scènes et des six placements, ressources IA inchangées et archive vérifiée. Pas d’essai sur un Pixel 9 physique.
