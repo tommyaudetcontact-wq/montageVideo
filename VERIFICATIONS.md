@@ -41,3 +41,16 @@ Affichage et interactions mobiles testés dans un cadre de navigateur de 390 px 
 - Galerie du projet : vignettes, Ajouter, badges Déjà importé / Utilisé. Le bouton déclenche l’input natif acceptant images et vidéos. Réimport du même fichier (nom/taille/date identiques) : média réutilisé et nombre de fichiers stable.
 - Navigateur : scénario de contrôle réussi, mode classique appliqué directement et annulé ; pas d’erreur JavaScript observée. Galerie Android système non modifiable : les badges sont dans l’application.
 - Vérification de syntaxe des scripts, tests du moteur de scènes et des six placements, ressources IA inchangées et archive vérifiée. Pas d’essai sur un Pixel 9 physique.
+
+
+## Vérifications de la version 2.1.0
+
+- Choix Créer / Modifier / Supprimer testés dans le navigateur ; suppression du projet inactif et du dernier projet testée sur un stockage simulé isolé. Les médias partagés et les préréglages sont conservés.
+- Galerie : sujet détouré et fonds présents, autres prises de narration masquées.
+- Auto zoom vérifié à 0 %, au milieu et à la fin (35 % dans le test).
+- Pop-out : diminution de taille visible avant le déplacement final, opacité nulle à la fin. Continuité des scènes coupées et axe de rotation vérifiés.
+- Reconnaissance de deux vraies prises : retrait de « Ça, c’est… » recommencé et de la première tentative de « La semaine dernière ». Application complète, undo et annulation pendant l’analyse contrôlés.
+- Export réel de contrôle : MP4 complet, index moov placé avant mdat, plusieurs images clés rapprochées. Le format réserve son index sans garder tout le MP4 en mémoire sur les navigateurs disposant du stockage privé.
+- Régressions : rognage, poignées et ripple, ordre et profondeur des pistes, duplication/gel, cache des masques, préréglages, animations, mixage et décalage audio, forme d’onde.
+
+Les essais ont été exécutés sur PC dans Chromium. Le chargement tardif du modèle, le worker monofil et sa libération limitent la charge mobile ; aucune mesure matérielle sur Pixel 9 n’a été effectuée ici.

@@ -8,6 +8,24 @@ function loadMediaLibrary() {
 }
 function exportStatus(message) { document.getElementById('export-status').textContent=message; }
 function checkExportCancelled() { if(exportCancelled) throw new Error('Export annulé.'); }
+async function createExportDestination(B,duration,bitrate){
+ // Browsers can expose getDirectory() on file:// while rejecting every call.
+ // Keep the file-page export entirely in memory; HTTPS still streams to disk.
+ let directory,file,key,writer;
+ if(location.protocol!=='file:'&&navigator.storage?.getDirectory){
+  try{
+   directory=await mediaStorageDirectory();key='export-'+crypto.randomUUID()+'.mp4';
+   file=await directory.getFileHandle(key,{create:true});writer=await file.createWritable();
+   return {target:new B.StreamTarget(writer,{chunked:true,chunkSize:1024*1024}),directory,file,key,writer};
+  }catch(e){
+   if(writer)await writer.abort().catch(()=>{});
+   if(directory&&key)await directory.removeEntry(key).catch(()=>{});
+   if(!['SecurityError','NotAllowedError','NotSupportedError'].includes(e.name))throw e;
+  }
+ }
+ if(/Android|iPhone|iPad/i.test(navigator.userAgent)&&duration*bitrate/8>192*1024*1024)throw Error('Espace de travail privé indisponible : cet export est trop long pour la mémoire du téléphone. Ouvrez la version HTTPS dans Chrome récent.');
+ return {target:new B.BufferTarget()};
+}
 async function exportProject() {
   if(exporting || !state.timeline.length) return showToast('Ajoutez une vidéo.');
   if(!window.VideoEncoder || !window.VideoDecoder) return showToast('Export précis indisponible ici. Ouvrez la page HTTPS dans un navigateur récent compatible WebCodecs.');
@@ -66,13 +84,13 @@ async function exportProject() {
     }
     const canvas=document.createElement('canvas'); canvas.width=width;canvas.height=height;
     const ctx=canvas.getContext('2d',{alpha:false}); ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
-    let target;
-    if(navigator.storage?.getDirectory){exportDirectory=await mediaStorageDirectory();exportFileKey='export-'+crypto.randomUUID()+'.mp4';exportFile=await exportDirectory.getFileHandle(exportFileKey,{create:true});exportWriter=await exportFile.createWritable();target=new B.StreamTarget(exportWriter,{chunked:true,chunkSize:1024*1024});}
-    else {if(/Android|iPhone|iPad/i.test(navigator.userAgent)&&duration*bitrate/8>192*1024*1024)throw Error('Ce navigateur ne permet pas l’export long sans tout garder en mémoire. Ouvrez le site dans Chrome récent.');target=new B.BufferTarget();}
-    output=new B.Output({format:new B.Mp4OutputFormat({fastStart:exportFile?false:'in-memory'}),target});
+    exportStatus('Préparation du fichier MP4…');
+    const destination=await createExportDestination(B,duration,bitrate);
+    const target=destination.target;exportDirectory=destination.directory;exportFile=destination.file;exportFileKey=destination.key;exportWriter=destination.writer;
+    output=new B.Output({format:new B.Mp4OutputFormat({fastStart:'reserve'}),target});
     videoSource=new B.CanvasSource(canvas,{codec:'avc',quality,keyFrameInterval:2});
-    output.addVideoTrack(videoSource,{frameRate:fps});
-    if(audible.length){audioSource=new B.AudioSampleSource({codec:'aac',quality:new B.Quality({bitrate:192000})});output.addAudioTrack(audioSource);}
+    output.addVideoTrack(videoSource,{frameRate:fps,maximumPacketCount:Math.ceil(duration*fps)+2});
+    if(audible.length){audioSource=new B.AudioSampleSource({codec:'aac',quality:new B.Quality({bitrate:192000})});output.addAudioTrack(audioSource,{maximumPacketCount:Math.ceil(duration*48000/960)+10});}
     await output.start();
     const frameCount=Math.ceil(duration*fps-1e-6); let audioCursor=0;
     const audioTotal=Math.round(duration*48000);
@@ -80,7 +98,7 @@ async function exportProject() {
       checkExportCancelled();
       const time=index/fps, frameDuration=Math.min(1/fps,duration-time);
       await renderOfflineFrame(ctx,canvas,project,inputs,time,exportGroups);
-      await videoSource.add(time,frameDuration,{keyFrame:index===0});
+      await videoSource.add(time,frameDuration,{keyFrame:index%Math.max(1,Math.round(fps/3))===0});
       if(audioSource)await prepareExportAudioWindow(audible,time,frameDuration,inputs,B);
       // Audio follows the same project clock; speed of computation is irrelevant.
       if(audioSource) {

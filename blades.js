@@ -62,7 +62,7 @@ document.addEventListener('DOMContentLoaded',()=>{
  const showAnimation=kind=>{
    if(!requireClip())return;
    keyPanel.hidden=kind!=='keys';autoField.hidden=kind!=='auto';popField.hidden=kind!=='pop';
-   open(kind==='keys'?'Keyframes':kind==='auto'?'Auto-keyframes · zoom progressif':'Animation · pop-up',[animation]);
+   open(kind==='keys'?'Keyframes':kind==='auto'?'Auto zoom · 0 % → zoom final':'Animation · pop-up',[animation]);
  };
  // A hold is intercepted before any existing click listener receives the release click.
  function hold(id,show,click){
@@ -127,7 +127,7 @@ document.addEventListener('DOMContentLoaded',()=>{
    if(row.some(c=>!expanded.has(c)&&c.timelineStart<end&&c.timelineStart+c.endTime-c.startTime>start))return showToast('Sélectionnez aussi les clips situés entre les deux.');
    const id='sequence_'+Date.now().toString(36);state.groups[id]={id,kind:'sequence',pivotX:workspaceWidth()/2,pivotY:workspaceHeight()/2,autoZoom:{enabled:false,percent:15}};
    let cursor=start;for(const c of clips){c.groupId=id;c.timelineStart=cursor;cursor+=c.endTime-c.startTime;}
-   state.activeClipId=clips[0].id;cancelFusion();commit();showToast('Fusion terminée. Auto-keyframes couvre toute la capsule.');
+   state.activeClipId=clips[0].id;cancelFusion();commit();showToast('Fusion terminée. Auto zoom couvre toute la capsule.');
  };
 
 });

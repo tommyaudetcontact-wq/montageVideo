@@ -76,7 +76,7 @@ async function ensureClipCutout(clip,options={}) {
       const pending=[];const scheduled=new Set();
       const consume=async wrapped=>{
         if(!wrapped)return;check();
-        while(options.background&&(exporting||state.isPlaying||document.hidden)){await new Promise(r=>setTimeout(r,150));check();}
+        while(options.background&&(exporting||state.isPlaying||document.hidden||window.autoCutRecognizing)){await new Promise(r=>setTimeout(r,150));check();}
         const at=wrapped.timestamp,stamp=Math.round(at*1e6);
         if(record.entries.has(stamp)||scheduled.has(stamp))return;scheduled.add(stamp);
         // Copy before advancing CanvasSink's reusable surface, then pipeline decode/inference/compression.

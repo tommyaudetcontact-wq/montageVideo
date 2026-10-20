@@ -31,3 +31,7 @@
 #scene-gallery{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;max-height:215px;overflow-y:auto;margin:10px 0}
 #scene-gallery button{display:flex;flex-direction:column;align-items:stretch;text-align:left;min-width:0;padding:5px;position:relative;background:#0b467d;gap:4px}
 #scene-gallery .chosen{outline:2px solid #83f4dc;background:#226d92}#scene-gallery img,.scene-gallery-icon{width:100%;height:65px;object-fit:cover;border-radius:6px}.scene-gallery-icon{display:grid;place-items:center;background:#12365f;font-size:24px}.scene-gallery-name{font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#scene-gallery .scene-gallery-badge{font-size:9px;letter-spacing:0;background:#0c786d;color:#d9fff3;border-radius:4px;padding:3px}.scene-gallery-add{justify-content:center;text-align:center!important;min-height:96px;border-style:dashed!important}
+
+.scene-gallery-subject{border:2px solid #bb9bff;background:repeating-conic-gradient(#182f4b 0% 25%,#213d58 0% 50%) 50%/16px 16px}.scene-gallery-subject canvas{width:100%;height:120px;object-fit:contain}.scene-gallery-subject .scene-gallery-name{background:#182d49}.scene-gallery-card{min-width:0}
+
+#autocut-progress{position:fixed;z-index:20000;left:12px;right:12px;bottom:12px;padding:16px;border-radius:14px;background:#153e64;color:white;display:flex;align-items:center;gap:12px;box-shadow:0 6px 30px #0008}#autocut-progress span{flex:1}

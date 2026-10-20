@@ -31,7 +31,7 @@ const SceneEngine=(()=>{
   }else if(settings.mode==='pip'){
    const pose=fullHeightPose(media?.element?.videoWidth||media?.element?.naturalWidth,media?.element?.videoHeight||media?.element?.naturalHeight);Object.assign(c,pose);
    const layout=settings.layout||'right',upper=layout.startsWith('top-'),left=layout.includes('left'),straight=layout.startsWith('straight-');
-   const height=(upper?.45:layout==='large'?.72:.52)*h,scale=height/c.baseHeight,width=c.baseWidth*scale;
+   const height=(upper?.50:layout==='large'?.76:.58)*h,scale=height/c.baseHeight,width=c.baseWidth*scale;
    const rotation=upper?(left?135:-135):straight||layout==='center'||layout==='large'?0:left?25:-25;
    const radians=rotation*Math.PI/180,bleed=h*.025;
    const centerY=upper?-Math.cos(radians)*height/2-bleed:h-Math.cos(radians)*height/2+Math.abs(Math.sin(radians))*width/2+bleed;
@@ -75,7 +75,7 @@ const SceneEngine=(()=>{
    }
    const originalPose=c.scene?.originalPose||Object.fromEntries(['x','y','width','height','baseWidth','baseHeight','scale','rotation','crop','cropRatio','keyframes','autoZoom','popUp','aiBackgroundRemoval','animationStart','animationDuration'].filter(k=>c[k]!==undefined).map(k=>[k,structuredClone(c[k])]));
    if(!same)layoutSubject(c,cfg);
-   else if(c.popUp)c.popUp.duration=cfg.popup;
+   else c.popUp={enabled:cfg.mode==='pip',duration:cfg.popup};
    const visualSourceOffset=existingId&&c.scene?.visualMediaId===cfg.visualMediaId?(c.scene.visualSourceOffset??((c.timelineStart||0)-from)):(c.timelineStart||0)-from;
    c.scene={...structuredClone(cfg),id,originalPose,visualSourceOffset};
   }
@@ -107,7 +107,7 @@ const SceneEngine=(()=>{
   const result=[];let previous=null;
   for(const c of [...timeline].filter(c=>clipTrack(c)===0).sort((a,b)=>(a.timelineStart||0)-(b.timelineStart||0))){
    const last=result.at(-1),samePose=previous&&['x','y','width','height','rotation'].every(k=>Math.abs((previous[k]||0)-(c[k]||0))<.001);
-   const linked=previous?.scene&&c.scene&&(previous.scene.id===c.scene.id||(c.scene.continuous&&c.scene.mode==='pip'&&previous.scene.mode==='pip'&&samePose));
+   const linked=previous?.scene?.mode==='pip'&&c.scene?.mode==='pip'&&(previous.scene.id===c.scene.id||(c.scene.continuous&&samePose));
    if(last&&linked&&Math.abs(last.end-(c.timelineStart||0))<.025){last.clips.push(c);last.end=end(c);}else result.push({start:c.timelineStart||0,end:end(c),clips:[c]});previous=c;
   }
   return result;

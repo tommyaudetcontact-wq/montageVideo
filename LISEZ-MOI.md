@@ -4,7 +4,7 @@ Cette V2 part de la dernière version de PocketCut (désormais V1). Elle ajoute 
 
 ## Publier et garder la V1
 
-Déposez tout le contenu de ce ZIP dans un dossier `v2/` de votre dépôt GitHub Pages. Votre V1 reste à son adresse habituelle ; la V2 s’ouvre avec `/v2/` à la fin. Le site est statique : aucun serveur personnel ni commande à lancer. Internet sert au chargement des bibliothèques CDN ; vos vidéos restent traitées et sauvegardées dans le navigateur.
+Pour mettre à jour une V2 existante, remplacez ses fichiers au même emplacement. Sur le dépôt montageVideo, gardez les fichiers à la racine : ne créez pas un nouveau dossier pour cette mise à jour, afin de retrouver les projets locaux à la même adresse. Une V1 conservée séparément peut rester dans son propre dossier. Le site est statique : aucun serveur personnel ni commande à lancer. Internet sert au chargement des bibliothèques CDN ; vos vidéos restent traitées et sauvegardées dans le navigateur.
 
 Le dossier `assets/ai/` doit être publié avec les autres fichiers. Gardez le chemin de publication de la V2 stable : les sauvegardes sont locales au navigateur, à l’origine et au dossier du site.
 
@@ -13,7 +13,7 @@ La V2 utilise un stockage distinct, même si elle est publiée au même chemin q
 ## Le parcours rapide
 
 1. **Prises** : importer vos vidéos, classées de la plus ancienne à la plus récente.
-2. **AutoCut** : un clic applique directement le comportement classique de la V1 (dernier bloc parlé). Maintenir ouvre les options, dont le nettoyage des pauses intérieures avec proposition avant application. Annuler reste disponible.
+2. **AutoCut** : conserve la dernière prise en recherchant les débuts de phrases recommencés. La première utilisation télécharge un modèle de voix ; le calcul se fait sur cet appareil, dans un worker à un seul fil. Maintenir ouvre les options et l’analyse avant application. La reconnaissance peut se tromper : les coupes sont annulables et l’option peut être désactivée. Si le modèle est indisponible, le logiciel annonce le repli vers la détection sonore.
 3. Sélectionner un clip principal ou plusieurs, puis **Illustrer**. Les champs Début/Fin permettent de choisir une plage à la seconde près, même à l’intérieur d’un clip.
 4. Choisir une image ou une vidéo dans les médias du projet, ou l’importer directement dans cette fenêtre.
 5. Choisir une présentation, un placement et appliquer.
@@ -73,3 +73,15 @@ Six placements : bas gauche/droite inclinés, haut gauche/droite inclinés (suje
 Le zoom par défaut du fond est de 35 %. Les scènes et compositions dont le zoom a déjà été enregistré conservent leur valeur.
 
 La galerie du projet propose Ajouter et des vignettes avec badges « Déjà importé » ou « Utilisé · n ». Ajouter ouvre le sélecteur photo/vidéo du téléphone, sans imposer la caméra. Android ne permet pas d’injecter nos badges dans sa propre galerie système. Une sélection présentant le même nom, la même taille et la même date que le fichier déjà importé réutilise sa source ; une nouvelle utilisation dans la timeline peut être créée sans recopier le média. Les badges sont locaux au projet ouvert.
+
+
+## Version 2.1.0
+
+- Projets : choix Créer, Modifier et Supprimer, avec confirmation nominative avant suppression. Les projets existants et le nom du stockage sont conservés. Le dossier de publication ne doit pas changer.
+- Auto zoom : de la taille posée (0 % d’augmentation) au pourcentage choisi, sur toute la durée du clip ou du groupe. 15 % par défaut.
+- Illustrer : sujet par défaut environ 12 % plus grand pour les placements de coin ; les poses existantes restent conservées. Le pop-out rétrécit avant de sortir selon la rotation choisie.
+- Galerie d’Illustrer : sujet sélectionné détouré et fonds image/vidéo, sans la liste des autres prises de narration.
+- Export : images clés toutes les dix images à 30 i/s et index MP4 placé au début, pour faciliter les retouches mobiles. L’ouverture directe en fichier local utilise un export en mémoire si le stockage privé du navigateur est inaccessible.
+- AutoCut : modèle multilingue Whisper base quantifié, chargé via [Transformers.js](https://huggingface.co/docs/transformers.js/api/pipelines). Les données audio ne sont pas envoyées à un service de transcription. Les mots reconnus sont sauvegardés avec le média pour éviter de refaire le calcul. L’annulation ne modifie pas la timeline ; le worker est libéré après une minute d’inactivité.
+
+Les fichiers `take-recognition.js` et `take-speech-worker.js` doivent être publiés avec le reste du dossier. Aucune installation ni serveur personnel n’est nécessaire. Les CDN et le téléchargement initial du modèle nécessitent Internet.

@@ -1,3 +1,1 @@
-PocketCut Studio 2.0.1
-AutoCut classique, placements ancres et galerie
-2026-10-19
+PocketCut Studio 2.1.0
