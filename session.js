@@ -1,5 +1,5 @@
 'use strict';
-const PROJECT_SETTINGS=['ai-threshold','ai-softness','ai-quality','export-resolution','export-fps','workspace-format'];
+const PROJECT_SETTINGS=['ai-threshold','ai-softness','ai-quality','export-mode','export-resolution','export-fps','workspace-format'];
 let localDatabase,localReady=false,localSaving=false,localDirty=false,localTimer,localCursorTimer;
 let currentProjectId=null,currentProjectName='Mon montage',localSaveTask=Promise.resolve(true),lastSaveProblem=null;
 const localMediaWritten=new Set();
@@ -65,7 +65,9 @@ async function restoreProjectSnapshot(saved){
  state.mediaFiles=restored;localMediaWritten.clear();for(const m of restored)localMediaWritten.add(m.id);
  PIXELS_PER_SECOND=timelineZoomValue(saved.timelineZoom||40);window.PocketCutTimeline?.refresh();
  currentProjectId=saved.id;currentProjectName=saved.name||'Mon montage';
+ document.getElementById('export-mode').value=saved.settings?.['export-mode']||'mobile';
  for(const [id,value] of Object.entries(saved.settings||{})){const el=document.getElementById(id);if(el)el.value=value;}
+ refreshExportOptions(true);
  historyStack=saved.historyStack;historyIndex=saved.historyIndex;state.currentTime=saved.currentTime||0;state.isSnapping=saved.isSnapping!==false;
  snapToggleBtn.classList.toggle('btn-info',state.isSnapping);snapToggleBtn.classList.toggle('btn-outline-info',!state.isSnapping);snapToggleBtn.setAttribute('aria-pressed',String(state.isSnapping));
  document.getElementById('precache-progress').hidden=true;document.getElementById('export-progress').hidden=true;

@@ -75,6 +75,12 @@ Le zoom par défaut du fond est de 35 %. Les scènes et compositions dont le zoo
 La galerie du projet propose Ajouter et des vignettes avec badges « Déjà importé » ou « Utilisé · n ». Ajouter ouvre le sélecteur photo/vidéo du téléphone, sans imposer la caméra. Android ne permet pas d’injecter nos badges dans sa propre galerie système. Une sélection présentant le même nom, la même taille et la même date que le fichier déjà importé réutilise sa source ; une nouvelle utilisation dans la timeline peut être créée sans recopier le média. Les badges sont locaux au projet ouvert.
 
 
+## Version 2.1.2
+
+- **Qualité → Retouches mobile / InShot** exporte directement en MP4 H.264 Constrained Baseline, YUV 4:2:0, 30 i/s fixes, sans réordonnancement des images et avec une image clé tous les 10 frames. Audio AAC 48 kHz, 192 kbit/s ; index MP4 placé avant les images. Aucun réencodage externe ni serveur n’est nécessaire.
+- Ce mode est activé par défaut pour les nouveaux projets en 720p HD. Le 1080p reste disponible. Le format de la zone de travail est conservé ; le choix « Source » de ce mode est plafonné à 1080p pour les retouches sur téléphone. Les sources importées restent intactes.
+- Le mode Standard conserve le choix de la définition source et de la cadence. Le mode choisi est sauvegardé par projet. Si Baseline n’est pas pris en charge à la définition demandée, l’application propose de choisir 720p ou le mode Standard, sans changer silencieusement de profil.
+
 ## Version 2.1.1
 
 - Le pop-out inverse désormais le pop-in complet : translation selon l’axe du clip, variation de taille et disparition progressent ensemble pendant la durée choisie. Cela s’applique aussi aux scènes Illustrer et aux scènes divisées.

@@ -47,6 +47,7 @@ document.addEventListener('DOMContentLoaded',()=>{
  function restore(){for(const {node,parent,next} of moved){parent.insertBefore(node,next?.parentNode===parent?next:null);node.hidden=true;}moved=[];}
  function open(title,nodes){
    restore();byId('tool-title').textContent=title;
+   dialog.querySelector('.dialog-hint').textContent=nodes.some(node=>node.classList.contains('export-settings'))?'Ces réglages s’appliquent à l’export du projet.':'Les réglages s’appliquent immédiatement au calque sélectionné.';
    for(const node of nodes){moved.push({node,parent:node.parentNode,next:node.nextSibling});content.appendChild(node);node.hidden=false;if(node.tagName==='DETAILS')node.open=true;node.classList.add('show');}
    if(active())greenScreenProcessor.updateSlidersUI(active());refreshAnimationPanel();if(!dialog.open)dialog.showModal();
  }

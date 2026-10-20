@@ -8,6 +8,26 @@ function loadMediaLibrary() {
 }
 function exportStatus(message) { document.getElementById('export-status').textContent=message; }
 function checkExportCancelled() { if(exportCancelled) throw new Error('Export annulé.'); }
+function resolveExportSettings({sourceWidth,sourceHeight,ratio,resolution,mode='mobile',fps=30}) {
+  const mobile=mode!=='standard',sourceEdge=Math.min(sourceWidth,sourceHeight);
+  const edge=resolution==='720'?720:resolution==='1080'?1080:mobile?Math.min(sourceEdge,1080):sourceEdge;
+  const width=Math.ceil((ratio>=1?edge*ratio:edge)/2)*2,height=Math.ceil((ratio>=1?edge:edge/ratio)/2)*2;
+  fps=mobile?30:fps;
+  const bitrate=mobile?(width*height<=720*1280?7000000:10000000):Math.round(Math.max(12000000,width*height*fps*.24));
+  const macroblocks=Math.ceil(width/16)*Math.ceil(height/16),level=macroblocks<=3600?31:macroblocks<=8192?40:macroblocks<=8704?42:macroblocks<=22080?50:52;
+  const encoder=mobile?{fullCodecString:'avc1.42e0'+level.toString(16),latencyMode:'realtime',bitrateMode:'constant'}:{};
+  return {mobile,width,height,fps,bitrate,encoder,keyframeFrames:mobile?10:Math.max(1,Math.round(fps/3))};
+}
+function refreshExportOptions(restoring=false) {
+  const mode=document.getElementById('export-mode'),fps=document.getElementById('export-fps');if(!mode||!fps)return;
+  const mobile=mode.value!=='standard';
+  if(mobile&&(!fps.disabled||restoring===true)){fps.dataset.standardValue=fps.value;fps.value='30';}
+  if(!mobile&&fps.disabled&&restoring!==true)fps.value=fps.dataset.standardValue||'0';
+  fps.disabled=mobile;
+  document.querySelector('#export-resolution option[value="source"]').textContent=mobile?'Source · maximum 1080p':'Originale (source)';
+  document.getElementById('export-mode-hint').textContent=mobile?'MP4 pour retouches mobile : 30 i/s fixes, H.264 Baseline, images clés tous les 10 frames. En définition source, la sortie est limitée à 1080p.':'MP4 standard : définition et cadence au choix, audio AAC.';
+}
+if(typeof document!=='undefined')document.addEventListener('DOMContentLoaded',()=>{document.getElementById('export-mode')?.addEventListener('change',refreshExportOptions);refreshExportOptions();});
 async function createExportDestination(B,duration,bitrate){
  // Browsers can expose getDirectory() on file:// while rejecting every call.
  // Keep the file-page export entirely in memory; HTTPS still streams to disk.
@@ -58,24 +78,18 @@ async function exportProject() {
     }
     const primary=project.find(c=>c.type==='video' && !c.aiBackgroundRemoval) || project.find(c=>c.type==='video');
     const ref=primary ? inputs.get(primary.mediaId) : null;
-    let width=ref?await ref.track.getDisplayWidth():1080;
-    let height=ref?await ref.track.getDisplayHeight():1920;
-    const ratio=workspaceWidth()/workspaceHeight();
-    if(state.projectWidth || document.getElementById('export-resolution').value==='1080') {
-      const edge=document.getElementById('export-resolution').value==='1080'?1080:Math.min(width,height);
-      width=ratio>=1?edge*ratio:edge;height=ratio>=1?edge:edge/ratio;
-    }
-    // AVC uses even dimensions. Never silently reduce an unsupported resolution.
-    width=Math.ceil(width/2)*2; height=Math.ceil(height/2)*2;
-    let fps=Number(document.getElementById('export-fps').value);
+    const sourceWidth=ref?await ref.track.getDisplayWidth():workspaceWidth(),sourceHeight=ref?await ref.track.getDisplayHeight():workspaceHeight();
+    const mode=document.getElementById('export-mode')?.value||'mobile';
+    let fps=mode==='mobile'?30:Number(document.getElementById('export-fps').value);
     if(!fps) {
       const metrics=ref?await ref.track.computeFrameRateMetrics():null;
       fps=metrics?.bestGuessFrameRate || 30;
       if(!Number.isFinite(fps) || fps<1) fps=30;
     }
-    const bitrate=Math.round(Math.max(12000000,width*height*fps*0.24));
+    const settings=resolveExportSettings({sourceWidth,sourceHeight,ratio:workspaceWidth()/workspaceHeight(),resolution:document.getElementById('export-resolution').value,mode,fps});
+    const {width,height,bitrate}=settings;fps=settings.fps;
     const quality=new B.Quality({bitrate});
-    if(!await B.canEncodeVideo('avc',{width,height,frameRate:fps,quality})) throw new Error(`H.264 ${width} × ${height} à ${fps.toFixed(2)} i/s non pris en charge sur cet appareil. Essayez 1080 × 1920 / 30 i/s.`);
+    if(!await B.canEncodeVideo('avc',{width,height,frameRate:fps,quality,...settings.encoder})) throw new Error(settings.mobile?`Export retouches mobile H.264 Baseline ${width} × ${height} indisponible sur ce navigateur. Essayez 720p ou choisissez le mode Standard.`:`H.264 ${width} × ${height} à ${fps.toFixed(2)} i/s non pris en charge sur cet appareil. Essayez 720p / 30 i/s.`);
     const audible=project.filter(c=>c.type==='video' && !c.muted && inputs.get(c.mediaId).audioTrack);
     if(audible.length && !await B.canEncodeAudio('aac',{numberOfChannels:2,sampleRate:48000})) {
       exportStatus('Chargement de l’encodeur audio AAC…');
@@ -88,17 +102,17 @@ async function exportProject() {
     const destination=await createExportDestination(B,duration,bitrate);
     const target=destination.target;exportDirectory=destination.directory;exportFile=destination.file;exportFileKey=destination.key;exportWriter=destination.writer;
     output=new B.Output({format:new B.Mp4OutputFormat({fastStart:'reserve'}),target});
-    videoSource=new B.CanvasSource(canvas,{codec:'avc',quality,keyFrameInterval:2});
+    videoSource=new B.CanvasSource(canvas,{codec:'avc',quality,...settings.encoder,keyFrameInterval:settings.keyframeFrames/fps});
     output.addVideoTrack(videoSource,{frameRate:fps,maximumPacketCount:Math.ceil(duration*fps)+2});
     if(audible.length){audioSource=new B.AudioSampleSource({codec:'aac',quality:new B.Quality({bitrate:192000})});output.addAudioTrack(audioSource,{maximumPacketCount:Math.ceil(duration*48000/960)+10});}
     await output.start();
     const frameCount=Math.ceil(duration*fps-1e-6); let audioCursor=0;
-    const audioTotal=Math.round(duration*48000);
+    const audioTotal=Math.round((settings.mobile?frameCount/fps:duration)*48000);
     for(let index=0;index<frameCount;index++) {
       checkExportCancelled();
-      const time=index/fps, frameDuration=Math.min(1/fps,duration-time);
+      const time=index/fps, frameDuration=settings.mobile?1/fps:Math.min(1/fps,duration-time);
       await renderOfflineFrame(ctx,canvas,project,inputs,time,exportGroups);
-      await videoSource.add(time,frameDuration,{keyFrame:index%Math.max(1,Math.round(fps/3))===0});
+      await videoSource.add(time,frameDuration,{keyFrame:index%settings.keyframeFrames===0});
       if(audioSource)await prepareExportAudioWindow(audible,time,frameDuration,inputs,B);
       // Audio follows the same project clock; speed of computation is irrelevant.
       if(audioSource) {
@@ -121,9 +135,9 @@ async function exportProject() {
     await output.finalize(); checkExportCancelled();
     exportWriter=null;
     const blob=new Blob([exportFile?await exportFile.getFile():output.target.buffer],{type:'video/mp4'});
-    const url=URL.createObjectURL(blob); const a=document.createElement('a');a.href=url;a.download=`pocketcut-${width}x${height}.mp4`;a.click();
+    const url=URL.createObjectURL(blob); const a=document.createElement('a');a.href=url;a.download=`pocketcut-${settings.mobile?'retouches-':''}${width}x${height}.mp4`;a.click();
     delivered=true;setTimeout(()=>{URL.revokeObjectURL(url);if(exportDirectory&&exportFileKey)exportDirectory.removeEntry(exportFileKey).catch(()=>{});},60000);
-    exportStatus(`MP4 prêt · ${width} × ${height} · ${frameCount} images`);showToast('Export MP4 terminé.');
+    exportStatus(`MP4 ${settings.mobile?'retouches mobile ':''}prêt · ${width} × ${height} · ${fps.toFixed(2)} i/s · ${frameCount} images`);showToast('Export MP4 terminé.');
   } catch(e) {
     if(output && !['finalized','canceled'].includes(output.state)) await output.cancel().catch(()=>{});
     const message=e.name==='SecurityError'||e.name==='NotReadableError'?'Accès à un fichier interrompu ('+e.name+'). Réessayez après la sauvegarde locale. '+e.message:e.message;exportStatus(message);showToast(message);console.error('Export PocketCut',e);

@@ -3,7 +3,7 @@ let projectSwitching=false;
 function emptyNamedProject(name){
  const id='project_'+(globalThis.crypto?.randomUUID?.()||Date.now().toString(36)+'_'+Math.random().toString(36).slice(2));
  const live={timeline:[],groups:{},activeClipId:null,projectWidth:720,projectHeight:1280};
- return {id,name:name.trim(),version:1,savedAt:Date.now(),live,currentTime:0,isSnapping:true,mediaIds:[],historyStack:[JSON.stringify(live)],historyIndex:0,settings:{'ai-threshold':'0.5','ai-softness':'0.12','ai-quality':'balanced','export-resolution':'source','export-fps':'0','workspace-format':'9:16'}};
+ return {id,name:name.trim(),version:1,savedAt:Date.now(),live,currentTime:0,isSnapping:true,mediaIds:[],historyStack:[JSON.stringify(live)],historyIndex:0,settings:{'ai-threshold':'0.5','ai-softness':'0.12','ai-quality':'balanced','export-mode':'mobile','export-resolution':'720','export-fps':'30','workspace-format':'9:16'}};
 }
 async function openNamedProject(id,skipSave=false){
  if(pendingMediaImports.size){showToast('Attendez la fin de l’importation avant de changer de projet.');return false;}
