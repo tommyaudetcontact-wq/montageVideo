@@ -75,6 +75,10 @@ Le zoom par défaut du fond est de 35 %. Les scènes et compositions dont le zoo
 La galerie du projet propose Ajouter et des vignettes avec badges « Déjà importé » ou « Utilisé · n ». Ajouter ouvre le sélecteur photo/vidéo du téléphone, sans imposer la caméra. Android ne permet pas d’injecter nos badges dans sa propre galerie système. Une sélection présentant le même nom, la même taille et la même date que le fichier déjà importé réutilise sa source ; une nouvelle utilisation dans la timeline peut être créée sans recopier le média. Les badges sont locaux au projet ouvert.
 
 
+## Version 2.1.1
+
+- Le pop-out inverse désormais le pop-in complet : translation selon l’axe du clip, variation de taille et disparition progressent ensemble pendant la durée choisie. Cela s’applique aussi aux scènes Illustrer et aux scènes divisées.
+
 ## Version 2.1.0
 
 - Projets : choix Créer, Modifier et Supprimer, avec confirmation nominative avant suppression. Les projets existants et le nom du stockage sont conservés. Le dossier de publication ne doit pas changer.

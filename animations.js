@@ -42,8 +42,12 @@ function animatedClip(clip,time,groups={},timeline=[]) {
     const edge=Math.min(Math.max(0.05,clip.popUp.duration||0.25),range.duration/2);
     const enter=clamp01(local/edge),exit=clamp01((range.duration-local)/edge);
     let factor=1,travel=1;
-    if(enter<1) {const u=enter-1;factor=1+2.70158*u*u*u+1.70158*u*u;travel=1-Math.pow(1-enter,3);opacity=clamp01(enter*4);}
-    if(exit<1) {factor=exit*exit;travel=1-Math.pow(clamp01((1-exit-.6)/.4),3);opacity=clamp01(exit*4);}
+    if(enter<1||exit<1) {
+      // Reverse the complete entrance: motion and scale share the same clock.
+      const progress=Math.min(enter,exit),u=progress-1;
+      factor=1+2.70158*u*u*u+1.70158*u*u;
+      travel=1-Math.pow(1-progress,3);opacity=clamp01(progress*4);
+    }
     const tiny=0.001;
     const distance=Math.hypot(workspaceWidth(),workspaceHeight())+Math.hypot(clip.baseWidth*scale,clip.baseHeight*scale)+Math.hypot(pose.centerX,pose.centerY)+32;
     const radians=pose.rotation*Math.PI/180;
