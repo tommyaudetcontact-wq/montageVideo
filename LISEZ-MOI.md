@@ -95,3 +95,35 @@ La galerie du projet propose Ajouter et des vignettes avec badges « Déjà impo
 - AutoCut : modèle multilingue Whisper base quantifié, chargé via [Transformers.js](https://huggingface.co/docs/transformers.js/api/pipelines). Les données audio ne sont pas envoyées à un service de transcription. Les mots reconnus sont sauvegardés avec le média pour éviter de refaire le calcul. L’annulation ne modifie pas la timeline ; le worker est libéré après une minute d’inactivité.
 
 Les fichiers `take-recognition.js` et `take-speech-worker.js` doivent être publiés avec le reste du dossier. Aucune installation ni serveur personnel n’est nécessaire. Les CDN et le téléchargement initial du modèle nécessitent Internet.
+
+
+## Version 2.2.0
+
+- Sauvegarde de la version 2.1.2 : branche `backup/avant-modifications-2026-10-21`.
+- Le déplacement entre pistes B-roll conserve la profondeur, le curseur suit le
+  clip déplacé et les scènes conservent leur illustration. Aimant active les
+  repères d’alignement sur les débuts/fins des autres clips (déplacement/poignées).
+- Espace : lecture/pause ; flèches : une image (1/30 s) ; Maj + flèches : 1 s ;
+  Retour arrière/Suppr : supprimer la sélection. Ignorés pendant une saisie,
+  dans les fenêtres de réglages et pendant l’export.
+- Auto zoom : De 0 % à 35 % par défaut, modifiables. Le pourcentage s’ajoute à la
+  taille de base. Les anciennes animations conservent leurs valeurs.
+- Illustrer → Options avancées : position X/Y et taille du fond, en plus du zoom
+  animé. Ces réglages sont inclus dans les compositions personnelles.
+- Projets → Sauvegarder le projet : fichier `.pocketcut` avec les médias originaux,
+  le montage, les scènes, les réglages et l’historique annuler/rétablir. Ouvrir un
+  projet restaure une nouvelle copie sans écraser les projets existants. Format :
+  en-tête JSON borné suivi des sources binaires sans compression. Les vidéos ne
+  passent pas en base64 ni en bloc dans le tas JavaScript. Ce fichier peut donc
+  être volumineux. Les caches de détourage sont recalculés après restauration.
+- Tous les outils → Background remover : détourage d’objets sur image/vidéo avec
+  U²-NetP, distinct du détourage humain. Maintenir pour affiner seuil/douceur.
+  Chargement à la demande, un seul worker WASM et caches bornés séparés. Traitement
+  sur l’appareil, aucun serveur. Internet sert au téléchargement du moteur CDN.
+  Le résultat dépend de l’image : détails fins, trous, reflets et décors chargés
+  peuvent demander un ajustement. Source/licence : `assets/ai/object/SOURCES.md`.
+
+Tests : `tests/editor-220.cjs`, `tests/popout.cjs`, `tests/mobile-export.cjs` ;
+aller-retour réel médias/historique dans Chromium ; gestes de déplacement et
+export MP4 HD du mode objet. L’export mobile garde H.264 Baseline, 30 i/s,
+images clés tous les 10 frames. Aucun test physique Pixel 9 effectué.

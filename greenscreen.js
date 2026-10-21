@@ -39,19 +39,24 @@ class GreenScreenProcessor {
     this.isReady=true; this.failure=null;this.status('IA prête · ressources '+(this.aiSource||'CDN')+' · traitement sur cet appareil');
   }
   prepareFrame(video, clip, options = {}) {
+    const generation=typeof maskCacheGeneration==='undefined'?0:maskCacheGeneration;
+    const check=()=>{if(typeof maskCacheGeneration!=='undefined'&&generation!==maskCacheGeneration)throw new DOMException('Détourage annulé : projet modifié.','AbortError');};
+    clip={...clip}; // Freeze the requested engine while asynchronous inference runs.
     const task=this.queue.catch(()=>{}).then(async()=>{
-      await this.ready;
-      if(video.readyState !== undefined && video.readyState<2) throw new Error('Image vidéo indisponible.');
-      const time=options.time ?? video.pocketFrameTime ?? video.currentTime;
+      check();if(clip.backgroundRemovalMode==='object')await objectRemover.init();else await this.ready;
+      check();if(video.readyState !== undefined && video.readyState<2) throw new Error('Image vidéo indisponible.');
+      const time=options.time ?? video.pocketFrameTime ?? video.currentTime ?? 0;
       const source=document.createElement('canvas');
-      const width=video.videoWidth || video.width, height=video.videoHeight || video.height;
+      const width=video.videoWidth || video.naturalWidth || video.width, height=video.videoHeight || video.naturalHeight || video.height;
       const quality=document.getElementById('ai-quality')?.value || 'balanced';
       const maxAnalysis=options.draft?256:options.fullResolution ? (quality==='fine'?1280:quality==='fast'?512:960) : (quality==='fine'?720:quality==='fast'?256:480);
       const scale=options.maskOnly ? Math.min(1,maxAnalysis/Math.max(width,height)) : options.fullResolution ? 1 : Math.min(1,1280/Math.max(width,height));
       source.width=Math.round(width*scale); source.height=Math.round(height*scale);
       source.getContext('2d').drawImage(video,0,0,source.width,source.height);
-      const cached=!options.maskOnly && window.PocketCutMasks ? await PocketCutMasks.get(clip.mediaId,time,!!options.fullResolution) : null;
+      const cached=!options.maskOnly && window.PocketCutMasks ? await PocketCutMasks.get(clip.mediaId,time,!!options.fullResolution,clip.backgroundRemovalMode) : null;
       let mask=cached?.mask;
+      if(!mask && clip.backgroundRemovalMode==='object'){mask=clip.type==='image'?await objectRemover.imageMask(source,clip):await createImageBitmap(await objectRemover.segment(source,options));}
+      const temporaryMask=clip.backgroundRemovalMode==='object'&&clip.type!=='image'&&!cached?mask:null;
       if(!mask) {
       const analysis=document.createElement('canvas');
       const factor=Math.min(1,maxAnalysis/Math.max(source.width,source.height));
@@ -66,6 +71,7 @@ class GreenScreenProcessor {
       mask=document.createElement('canvas'); mask.width=result.width; mask.height=result.height;
       mask.getContext('2d').putImageData(new ImageData(result.rgba,result.width,result.height),0,0);
       }
+      try{check();}catch(e){temporaryMask?.close();throw e;}
       if(options.maskOnly)return mask;
       const output=document.createElement('canvas'); output.width=source.width; output.height=source.height;
       const oc=output.getContext('2d'); oc.imageSmoothingEnabled=true;oc.imageSmoothingQuality='high';oc.drawImage(mask,0,0,output.width,output.height);
@@ -75,29 +81,30 @@ class GreenScreenProcessor {
         const final=!!cached?.final||!options.draft;
         const previous=this.frames.get(clip.id);
         // An older rapid task must not overwrite a final mask loaded in the meantime.
-        if(final||!previous?.final||!window.PocketCutMasks?.hasFinal?.(clip.mediaId,time))this.frames.set(clip.id,{canvas:output,mask:safeMask,time,paired:true,final});
+        if(final||!previous?.final||!window.PocketCutMasks?.hasFinal?.(clip.mediaId,time,clip.backgroundRemovalMode))this.frames.set(clip.id,{canvas:output,mask:safeMask,time,paired:true,final,mode:clip.backgroundRemovalMode});
       }
-      this.status(cached?'Détourage précalculé · lecture depuis le cache':'Détourage actif · personne');
+      temporaryMask?.close();this.status(cached?'Détourage précalculé · lecture depuis le cache':clip.backgroundRemovalMode==='object'?'Background remover actif · objet':'Détourage actif · personne');
       return output;
     });
     this.queue=task; return task;
   }
   processFrameFast(video, clip) {
+    if(clip.type==='image'){const frame=this.frames.get(clip.id),key=maskSettingsKey();if(frame?.mode===clip.backgroundRemovalMode&&frame.settings===key)return frame.canvas;if(!this.pending.has(clip.id)){this.pending.add(clip.id);this.prepareFrame(video,clip,{time:0}).then(()=>{const f=this.frames.get(clip.id);if(f)f.settings=key;requestAnimationFrame(renderCanvasFrame);}).catch(e=>{if(e.name!=='AbortError')this.status(e.message);}).finally(()=>this.pending.delete(clip.id));}return null;}
     if(video.readyState<2) return null;
     const presentedTime=video.pocketFrameTime??video.currentTime;
-    const cached=window.PocketCutMasks?.preview(clip.mediaId,presentedTime);
+    const cached=window.PocketCutMasks?.preview(clip.mediaId,presentedTime,clip.backgroundRemovalMode);
     if(cached && (this.frames.get(clip.id)?.time!==cached.time||this.frames.get(clip.id)?.cachedMask!==cached.mask)) {
       const old=this.frames.get(clip.id),mask=old?.mask instanceof HTMLCanvasElement?old.mask:document.createElement('canvas');
       if(mask.width!==cached.mask.width||mask.height!==cached.mask.height){mask.width=cached.mask.width;mask.height=cached.mask.height;}
-      const ctx=mask.getContext('2d');ctx.clearRect(0,0,mask.width,mask.height);ctx.drawImage(cached.mask,0,0);this.frames.set(clip.id,{mask,time:cached.time,duration:cached.duration,cachedMask:cached.mask,final:cached.final});
+      const ctx=mask.getContext('2d');ctx.clearRect(0,0,mask.width,mask.height);ctx.drawImage(cached.mask,0,0);this.frames.set(clip.id,{mask,time:cached.time,duration:cached.duration,cachedMask:cached.mask,final:cached.final,mode:clip.backgroundRemovalMode});
     }
-    const frame=this.frames.get(clip.id);
-    const finalAvailable=window.PocketCutMasks?.hasFinal?.(clip.mediaId,presentedTime);
-    if(!cached && !finalAvailable && !video.seeking && !this.pending.has(clip.id) && Date.now()>(this.retryAfter?.get(clip.id)||0) && !this.failure && (!frame || Math.abs(frame.time-presentedTime)>.001)) {
+    const candidate=this.frames.get(clip.id),frame=candidate&&((candidate.mode||'human')===(clip.backgroundRemovalMode||'human'))?candidate:null;
+    const finalAvailable=window.PocketCutMasks?.hasFinal?.(clip.mediaId,presentedTime,clip.backgroundRemovalMode);
+    if(!cached && !finalAvailable && !video.seeking && !this.pending.has(clip.id) && Date.now()>(this.retryAfter?.get(clip.id)||0) && (!this.failure||clip.backgroundRemovalMode==='object') && (!frame || Math.abs(frame.time-presentedTime)>.001)) {
       this.pending.add(clip.id);
       this.prepareFrame(video,clip,{draft:true}).then(()=>{
         if(!state.isPlaying && typeof renderCanvasFrame==='function') requestAnimationFrame(renderCanvasFrame);
-      }).catch(e=>{this.retryAfter??=new Map();this.retryAfter.set(clip.id,Date.now()+1000);this.status('Détourage : '+e.message);}).finally(()=>this.pending.delete(clip.id));
+      }).catch(e=>{if(e.name==='AbortError')return;this.retryAfter??=new Map();this.retryAfter.set(clip.id,Date.now()+1000);this.status('Détourage : '+e.message);}).finally(()=>this.pending.delete(clip.id));
     }
     if(!cached&&finalAvailable){
       const surface=this.previewSurfaces.get(clip.id);
@@ -158,7 +165,7 @@ class GreenScreenProcessor {
       if (processed) {
         ctx.drawImage(processed, drawX, drawY, width, height);
       } else {
-        this.awaitingCutout=true;
+        this.awaitingCutout=true;if(clip.backgroundRemovalMode==='object')ctx.drawImage(sourceElement,drawX,drawY,width,height);
       }
     } else {
       ctx.drawImage(sourceElement, drawX, drawY, width, height);

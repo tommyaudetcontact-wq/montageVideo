@@ -33,11 +33,11 @@ function groupRange(id,timeline) {
   const end=Math.max(...members.map(c=>(c.timelineStart||0)+c.endTime-c.startTime));
   return {start,duration:Math.max(0.001,end-start)};
 }
-function autoZoomFactor(percent,time,start,duration){return 1+(Number(percent)||0)/100*clamp01((time-start)/Math.max(.001,duration));}
+function autoZoomFactor(percent,time,start,duration,from=0){const a=Number(from)||0,b=Number(percent)||0;return 1+(a+(b-a)*clamp01((time-start)/Math.max(.001,duration)))/100;}
 function animatedClip(clip,time,groups={},timeline=[]) {
   const pose=manualPose(clip,time),range=animationRange(clip),local=time-range.start;
   let scale=pose.scale,cx=pose.centerX,cy=pose.centerY,opacity=1;
-  if(clip.autoZoom?.enabled) scale*=autoZoomFactor(clip.autoZoom.percent,time,range.start,range.duration);
+  if(clip.autoZoom?.enabled) scale*=autoZoomFactor(clip.autoZoom.percent,time,range.start,range.duration,clip.autoZoom.from);
   if(clip.popUp?.enabled) {
     const edge=Math.min(Math.max(0.05,clip.popUp.duration||0.25),range.duration/2);
     const enter=clamp01(local/edge),exit=clamp01((range.duration-local)/edge);
@@ -58,7 +58,7 @@ function animatedClip(clip,time,groups={},timeline=[]) {
   const group=clip.groupId && groups[clip.groupId];
   if(group?.autoZoom?.enabled) {
     const span=groupRange(clip.groupId,timeline);
-    const zoom=autoZoomFactor(group.autoZoom.percent,time,span.start,span.duration);
+    const zoom=autoZoomFactor(group.autoZoom.percent,time,span.start,span.duration,group.autoZoom.from);
     cx=(group.pivotX??360)+(cx-(group.pivotX??360))*zoom;
     cy=(group.pivotY??640)+(cy-(group.pivotY??640))*zoom;scale*=zoom;
   }
@@ -102,9 +102,9 @@ function initAnimationControls() {
   document.getElementById('apply-autozoom').onclick=()=>{
     const c=requireActive();if(!c)return;
     const percent=Number(document.getElementById('autozoom-percent').value);
-    if(!Number.isFinite(percent)||percent< -95 || percent>1000)return showToast('Choisissez un zoom entre −95 % et 1000 %.');
+    if(!Number.isFinite(percent)||percent< -95 || percent>1000||!Number.isFinite(Number(document.getElementById('autozoom-from').value))||Number(document.getElementById('autozoom-from').value)<-95||Number(document.getElementById('autozoom-from').value)>1000)return showToast('Choisissez un zoom entre −95 % et 1000 %.');
     const target=c.groupId&&state.groups[c.groupId] || c;
-    target.autoZoom={enabled:document.getElementById('autozoom-enabled').checked,percent};commit();
+    target.autoZoom={enabled:document.getElementById('autozoom-enabled').checked,from:Number(document.getElementById('autozoom-from').value)||0,percent};commit();
   };
   document.getElementById('apply-popup').onclick=()=>{
     const c=requireActive();if(!c)return;
@@ -128,7 +128,7 @@ function initAnimationControls() {
     const groupId='group_'+Date.now().toString(36);
     const members=state.timeline.filter(c=>expanded.has(c.id));
     const xs=members.map(c=>c.x||0),ys=members.map(c=>c.y||0);
-    state.groups[groupId]={id:groupId,pivotX:(Math.min(...xs)+Math.max(...members.map(c=>(c.x||0)+c.width)))/2,pivotY:(Math.min(...ys)+Math.max(...members.map(c=>(c.y||0)+c.height)))/2,autoZoom:{enabled:false,percent:15}};
+    state.groups[groupId]={id:groupId,pivotX:(Math.min(...xs)+Math.max(...members.map(c=>(c.x||0)+c.width)))/2,pivotY:(Math.min(...ys)+Math.max(...members.map(c=>(c.y||0)+c.height)))/2,autoZoom:{enabled:false,from:0,percent:35}};
     members.forEach(c=>c.groupId=groupId);state.activeClipId=members[0].id;selected.clear();commit();showToast('Calques fusionnés en groupe éditable. Auto-zoom appliqué sur toute sa durée.');
   };
   document.getElementById('unmerge-layers').onclick=()=>{
@@ -141,7 +141,7 @@ function initAnimationControls() {
     const c=active(),target=c?.groupId&&state.groups[c.groupId] || c;
     const span=c?.groupId?groupRange(c.groupId,state.timeline):c?animationRange(c):null;
     document.getElementById('animation-selection').textContent=c?`${c.groupId?'Groupe fusionné':'Calque'} · ${span.duration.toFixed(2)} s`:'Sélectionnez un calque dans la timeline';
-    for(const id of ['autozoom-percent','popup-duration'])if(document.activeElement?.id!==id)document.getElementById(id).value=id==='autozoom-percent'?(target?.autoZoom?.percent??15):(c?.popUp?.duration??0.25);
+    for(const id of ['autozoom-from','autozoom-percent','popup-duration'])if(document.activeElement?.id!==id)document.getElementById(id).value=id==='autozoom-from'?(target?.autoZoom?.from??0):id==='autozoom-percent'?(target?.autoZoom?.percent??35):(c?.popUp?.duration??0.25);
     document.getElementById('autozoom-enabled').checked=!!target?.autoZoom?.enabled;
     document.getElementById('popup-enabled').checked=!!c?.popUp?.enabled;
     document.getElementById('edit-layer-pose').checked=!!c && state.editPoseClipId===c.id;

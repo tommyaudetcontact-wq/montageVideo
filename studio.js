@@ -3,7 +3,7 @@ document.getElementById('toggle-ai').addEventListener('click',async()=>{
   const clip=state.timeline.find(c=>c.id===state.activeClipId);
   if(!clip || clip.type!=='video') return showToast('Sélectionnez un clip vidéo.');
   pausePlayback();
-  clip.aiBackgroundRemoval=!clip.aiBackgroundRemoval;
+  clip.aiBackgroundRemoval=clip.backgroundRemovalMode==='object'||!clip.aiBackgroundRemoval;clip.backgroundRemovalMode='human';
   greenScreenProcessor.frames.delete(clip.id);
   pushState(); renderTimeline(); renderCanvasFrame();
   if(clip.aiBackgroundRemoval)try{await primeClipCutout(clip);}catch(e){showToast('Détourage : '+e.message);}

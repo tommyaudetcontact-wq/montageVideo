@@ -173,7 +173,7 @@ async function renderOfflineFrame(ctx,canvas,project,inputs,time,groups={}) {
       const prepared=c.aiBackgroundRemoval?await greenScreenProcessor.prepareFrame(source,c,{fullResolution:true,time:sourceTime}):null;
       greenScreenProcessor.drawClipToCanvas(ctx,source,c,!!c.aiBackgroundRemoval,prepared,{time,groups,timeline:project,export:true});
       frames.delete(key);
-    } else greenScreenProcessor.drawClipToCanvas(ctx,source,c,false,null,{time,groups,timeline:project,export:true});
+    } else {const prepared=c.aiBackgroundRemoval?await greenScreenProcessor.prepareFrame(source,c,{fullResolution:true,time:0}):null;greenScreenProcessor.drawClipToCanvas(ctx,source,c,!!c.aiBackgroundRemoval,prepared,{time,groups,timeline:project,export:true});}
   }
   ctx.setTransform(1,0,0,1,0,0);
 }

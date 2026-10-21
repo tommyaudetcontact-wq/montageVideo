@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded',()=>{
    if(editTargets().length<2)return;
    const supported=['toggle-ai','btn-mute','btn-layer-up','btn-layer-down','btn-delete','btn-duplicate-pip-ai','btn-split','center-layer','fit-layer-height','remove-keyframe'];if(!supported.includes(id))return;
    if(window.heldTool===id){window.heldTool=null;return;}e.preventDefault();e.stopImmediatePropagation();pausePlayback();const clips=editTargets(),first=clips[0];
-   if(id==='toggle-ai'){const value=!first.aiBackgroundRemoval;for(const c of clips.filter(c=>c.type==='video')){c.aiBackgroundRemoval=value;greenScreenProcessor.frames.delete(c.id);if(value)window.primeClipCutout?.(c).catch(e=>showToast(e.message));}}
+   if(id==='toggle-ai'){const value=first.backgroundRemovalMode==='object'||!first.aiBackgroundRemoval;for(const c of clips.filter(c=>c.type==='video')){c.aiBackgroundRemoval=value;c.backgroundRemovalMode='human';greenScreenProcessor.frames.delete(c.id);if(value)window.primeClipCutout?.(c).catch(e=>showToast(e.message));}}
    if(id==='btn-mute'){const value=!first.muted;for(const c of clips)c.muted=value;}
    if(id==='btn-layer-up'||id==='btn-layer-down'){shiftSecondaryLayers(clips,id==='btn-layer-up'?1:-1);}
    if(id==='center-layer')for(const c of clips){prepareLayerEdit(c);c.x=(workspaceWidth()-c.width)/2;c.y=(workspaceHeight()-c.height)/2;updateKeyframeFromEdit(c);}

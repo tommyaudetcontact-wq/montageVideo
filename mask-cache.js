@@ -7,9 +7,9 @@ const MASK_CACHE_LIMIT=(MASK_MOBILE?64:128)*1024*1024;
 function maskSettingsKey() {
   return ['guided-v4-final',document.getElementById('ai-threshold').value,document.getElementById('ai-softness').value,document.getElementById('ai-quality').value].join('|');
 }
-function maskRecordKey(mediaId){return mediaId+'|'+maskSettingsKey();}
+function maskRecordKey(mediaId,mode='human'){return (mode==='object'?'object|':'')+mediaId+'|'+maskSettingsKey();}
 function maskCacheCovers(clip) {
-  const record=cutoutRecords.get(maskRecordKey(clip.mediaId));
+  const record=cutoutRecords.get(maskRecordKey(clip.mediaId,clip.backgroundRemovalMode));
   return !!record && record.ranges.some(r=>r.start<=clip.startTime+0.00001 && r.end>=clip.endTime-0.00001);
 }
 function mergeMaskRanges(ranges,added) {
@@ -37,8 +37,8 @@ async function decodeCachedMask(record,entry) {
   }).finally(()=>record.decoding.delete(entry.at));
   record.decoding.set(entry.at,job);return job;
 }
-function previewCachedMask(mediaId,time) {
-  const key=maskRecordKey(mediaId);let record=cutoutRecords.get(key),entry=cachedMaskEntry(record,time),final=true;
+function previewCachedMask(mediaId,time,mode) {
+  const key=maskRecordKey(mediaId,mode);let record=cutoutRecords.get(key),entry=cachedMaskEntry(record,time),final=true;
   if(!maskEntryMatches(entry,time)){final=false;record=cutoutRecords.get(key+'|draft');entry=cachedMaskEntry(record,time);if(!maskEntryMatches(entry,time))return null;}
   record.previewAt=entry.at;record.previewAccess=Date.now();
   const mask=record.decoded.get(entry.at);
@@ -51,15 +51,15 @@ function previewCachedMask(mediaId,time) {
   }
   return mask?{mask,time:entry.at,duration:entry.duration,final}:null;
 }
-async function getCachedMask(mediaId,time,absolute=false) {
-  const record=cutoutRecords.get(maskRecordKey(mediaId));const at=absolute?time:time;
+async function getCachedMask(mediaId,time,absolute=false,mode) {
+  const record=cutoutRecords.get(maskRecordKey(mediaId,mode));const at=absolute?time:time;
   const entry=cachedMaskEntry(record,at);if(!maskEntryMatches(entry,at))return null;
   const mask=await decodeCachedMask(record,entry);return mask?{mask,time:entry.at,duration:entry.duration,final:true}:null;
 }
 async function ensureClipCutout(clip,options={}) {
   if(!clip.aiBackgroundRemoval || clip.type!=='video')return;
   const media=state.mediaFiles.find(m=>m.id===clip.mediaId);if(!media)throw new Error('Média source absent.');
-  const generation=maskCacheGeneration,key=maskRecordKey(clip.mediaId)+(options.draft?'|draft':'');
+  const generation=maskCacheGeneration,key=maskRecordKey(clip.mediaId,clip.backgroundRemovalMode)+(options.draft?'|draft':'');
   let record=cutoutRecords.get(key);
   if(!record){record={first:0,entries:new Map(),sorted:[],decoded:new Map(),decoding:new Map(),ranges:[],job:null};cutoutRecords.set(key,record);}
   if(options.onProgress)record.report=options.onProgress;
@@ -68,7 +68,7 @@ async function ensureClipCutout(clip,options={}) {
   const start=clip.startTime,end=clip.endTime;
   const check=()=>{if(generation!==maskCacheGeneration||options.cancelled?.())throw new Error('Préparation du détourage annulée.');};
   const job=(async()=>{
-    check();await greenScreenProcessor.ready;const B=await loadMediaLibrary();
+    check();if(clip.backgroundRemovalMode==='object')await objectRemover.init();else await greenScreenProcessor.ready;const B=await loadMediaLibrary();
     const input=new B.Input({source:makeMediaBlobSource(B,await getStableMediaFile(media)),formats:B.ALL_FORMATS});
     try {
       const track=await input.getPrimaryVideoTrack();if(!track||!await track.canDecode())throw new Error('Vidéo non décodable pour le précalcul.');
@@ -84,7 +84,7 @@ async function ensureClipCutout(clip,options={}) {
         const factor=Math.min(1,max/Math.max(wrapped.canvas.width,wrapped.canvas.height));
         const copied=document.createElement('canvas');copied.width=Math.round(wrapped.canvas.width*factor);copied.height=Math.round(wrapped.canvas.height*factor);
         const context=copied.getContext('2d');context.imageSmoothingQuality='high';context.drawImage(wrapped.canvas,0,0,copied.width,copied.height);
-        const task=(async()=>{const blob=await cutoutWorkerPool.segment(copied,{draft:options.draft});check();
+        const task=(async()=>{const blob=await (clip.backgroundRemovalMode==='object'?objectRemover:cutoutWorkerPool).segment(copied,{draft:options.draft});check();
         if(maskCacheBytes+blob.size>MASK_CACHE_LIMIT)throw new Error('Cache IA rempli · aperçu rapide disponible ; qualité finale calculée à l’export.');
         const entry={at,blob,duration:wrapped.duration||1/30};record.entries.set(stamp,entry);maskCacheBytes+=blob.size;computed++;
         insertMaskEntry(record,entry);
@@ -107,7 +107,7 @@ async function ensureClipCutout(clip,options={}) {
 function clearCutoutCache() {
   maskCacheGeneration++;
   for(const record of cutoutRecords.values())for(const mask of record.decoded.values())mask.close();
-  cutoutRecords.clear();maskCacheBytes=0;greenScreenProcessor.frames.clear();
+  cutoutRecords.clear();maskCacheBytes=0;greenScreenProcessor.frames.clear();if(typeof objectRemover!=='undefined')objectRemover.clear();
 }
 function scheduleCutoutPreload() {
   if(maskPreloadRunning)maskPreloadRestart=true;
@@ -115,7 +115,7 @@ function scheduleCutoutPreload() {
 }
 async function preloadProjectCutouts() {
   if(maskPreloadRunning||exporting)return;
-  const clips=state.timeline.filter(c=>c.aiBackgroundRemoval&&!maskCacheCovers(c)).sort((a,b)=>{const rank=c=>c.id===state.activeClipId?-1:(c.timelineStart||0)>=state.currentTime?(c.timelineStart||0)-state.currentTime:1e9+(c.timelineStart||0);return rank(a)-rank(b);});if(!clips.length)return;
+  const clips=state.timeline.filter(c=>c.type==='video'&&c.aiBackgroundRemoval&&!maskCacheCovers(c)).sort((a,b)=>{const rank=c=>c.id===state.activeClipId?-1:(c.timelineStart||0)>=state.currentTime?(c.timelineStart||0)-state.currentTime:1e9+(c.timelineStart||0);return rank(a)-rank(b);});if(!clips.length)return;
   const generation=maskCacheGeneration,panel=document.getElementById('precache-progress'),status=document.getElementById('precache-status'),meter=document.getElementById('precache-meter'),cancel=document.getElementById('cancel-precache');
   maskPreloadRunning=true;panel.hidden=false;cancel.textContent='Annuler';meter.value=0;
   try {
@@ -128,7 +128,7 @@ async function preloadProjectCutouts() {
   } catch(e){status.textContent=e.message;}
   finally {maskPreloadRunning=false;cancel.textContent='Fermer';if(maskPreloadRestart){maskPreloadRestart=false;scheduleCutoutPreload();}}
 }
-function hasFinalMask(mediaId,time){return maskEntryMatches(cachedMaskEntry(cutoutRecords.get(maskRecordKey(mediaId)),time),time);}
+function hasFinalMask(mediaId,time,mode){return maskEntryMatches(cachedMaskEntry(cutoutRecords.get(maskRecordKey(mediaId,mode)),time),time);}
 window.PocketCutMasks={hasFinal:hasFinalMask,preview:previewCachedMask,get:getCachedMask,ensure:ensureClipCutout,covers:maskCacheCovers};
 document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('cancel-precache').onclick=()=>{

@@ -4,13 +4,13 @@ const SceneEngine=(()=>{
  const duration=c=>Math.max(0,c.endTime-c.startTime);
  const end=c=>(c.timelineStart||0)+duration(c);
  const uid=prefix=>prefix+'_'+crypto.randomUUID();
- const defaults={placementVersion:2,mode:'pip',layout:'right',zoom:35,faceY:.47,faceHeight:.30,popup:.25,visualAudio:false,narrationAudio:true,shortVideo:'freeze',bgX:.5,bgY:.5};
+ const defaults={placementVersion:2,mode:'pip',layout:'right',zoom:35,faceY:.47,faceHeight:.30,popup:.25,visualAudio:false,narrationAudio:true,shortVideo:'freeze',bgX:.5,bgY:.5,bgOffsetX:0,bgOffsetY:0,bgZoom:100};
  function runs(timeline){
   const result=[];
-  for(const c of [...timeline].filter(c=>clipTrack(c)===0).sort((a,b)=>(a.timelineStart||0)-(b.timelineStart||0))){
+  for(const c of [...timeline].sort((a,b)=>clipTrack(a)-clipTrack(b)||(a.timelineStart||0)-(b.timelineStart||0))){
    if(!c.scene)continue;
    const last=result.at(-1);
-   if(last&&last.id===c.scene.id&&Math.abs(last.end-(c.timelineStart||0))<.025){last.clips.push(c);last.end=end(c);}
+   if(last&&clipTrack(last.clips[0])===clipTrack(c)&&last.id===c.scene.id&&Math.abs(last.end-(c.timelineStart||0))<.025){last.clips.push(c);last.end=end(c);}
    else result.push({id:c.scene.id,start:c.timelineStart||0,end:end(c),clips:[c]});
   }
   return result;
@@ -24,8 +24,8 @@ const SceneEngine=(()=>{
   const w=workspaceWidth(),h=workspaceHeight(),rect={x:0,y:0,width:w,height:h};
   const media=state.mediaFiles.find(m=>m.id===c.mediaId);
   delete c.viewRect;c.crop={};c.cropRatio='free';c.keyframes=[];delete c.animationStart;delete c.animationDuration;
-  c.autoZoom={enabled:false,percent:15};c.popUp={enabled:settings.mode==='pip',duration:settings.popup};
-  c.aiBackgroundRemoval=settings.mode==='pip'&&c.type==='video';
+  c.autoZoom={enabled:false,from:0,percent:35};c.popUp={enabled:settings.mode==='pip',duration:settings.popup};
+  c.aiBackgroundRemoval=settings.mode==='pip'&&c.type==='video';c.backgroundRemovalMode='human';
   if(settings.mode==='split'){
    const top={...rect,height:h*(settings.faceHeight??.30)},pose=cover(media,top);pose.y=top.height/2-(settings.faceY??.47)*pose.height;Object.assign(c,pose);c.viewRect=top;
   }else if(settings.mode==='pip'){
@@ -49,31 +49,31 @@ const SceneEngine=(()=>{
    c.scene.placementVersion=2;
   }
  }
- function splitAt(timeline,time){
-  const index=timeline.findIndex(c=>clipTrack(c)===0&&time>(c.timelineStart||0)+.001&&time<end(c)-.001);
+ function splitAt(timeline,time,track=0){
+  const index=timeline.findIndex(c=>clipTrack(c)===track&&time>(c.timelineStart||0)+.001&&time<end(c)-.001);
   if(index<0)return;
   const original=timeline[index],offset=time-(original.timelineStart||0),left=structuredClone(original),right=structuredClone(original);
   left.id=uid('clip');right.id=uid('clip');left.endTime=original.startTime+offset;right.startTime=left.endTime;right.timelineStart=time;
   retainSplitAnimation(original,left,right);timeline.splice(index,1,left,right);
  }
- function apply(from,to,settings,existingId=null){
+ function apply(from,to,settings,existingId=null,track=0){
   if(!Number.isFinite(from)||!Number.isFinite(to)||from<0||to-from<.02)throw Error('Choisissez un passage d’au moins 0,02 s.');
-  const overlapping=state.timeline.filter(c=>clipTrack(c)===0&&end(c)>from+.001&&(c.timelineStart||0)<to-.001);
+  const overlapping=state.timeline.filter(c=>clipTrack(c)===track&&end(c)>from+.001&&(c.timelineStart||0)<to-.001);
   if(!overlapping.length)throw Error('Ce passage ne contient pas de narration sur la piste principale.');
   if(existingId){const prior=runs(state.timeline).find(r=>r.id===existingId&&r.end>from&&r.start<to);if(!prior||Math.abs(prior.start-from)>.001||Math.abs(prior.end-to)>.001)existingId=null;}
   const cfg={...defaults,...settings};
   if(!['pip','split','excerpt','face'].includes(cfg.mode))throw Error('Composition inconnue.');
   if(cfg.mode!=='face'&&!state.mediaFiles.some(m=>m.id===cfg.visualMediaId))throw Error('Choisissez une image ou une vidéo pour le fond.');
-  splitAt(state.timeline,from);splitAt(state.timeline,to);
-  const targets=state.timeline.filter(c=>clipTrack(c)===0&&(c.timelineStart||0)>=from-.001&&end(c)<=to+.001);
+  splitAt(state.timeline,from,track);splitAt(state.timeline,to,track);
+  const targets=state.timeline.filter(c=>clipTrack(c)===track&&(c.timelineStart||0)>=from-.001&&end(c)<=to+.001);
   const id=existingId||uid('scene');
   for(const c of targets){
    const same=c.scene?.id===existingId&&c.scene.mode===cfg.mode&&c.scene.layout===cfg.layout&&(cfg.mode!=='split'||c.scene.faceY===cfg.faceY&&c.scene.faceHeight===cfg.faceHeight);
    if(cfg.mode==='face'){
-    if(c.scene?.originalPose){const original=structuredClone(c.scene.originalPose);for(const k of ['x','y','width','height','baseWidth','baseHeight','scale','rotation','crop','cropRatio','keyframes','autoZoom','popUp','aiBackgroundRemoval','animationStart','animationDuration'])delete c[k];Object.assign(c,original);}else layoutSubject(c,{...cfg,mode:'face'});
+    if(c.scene?.originalPose){const original=structuredClone(c.scene.originalPose);for(const k of ['x','y','width','height','baseWidth','baseHeight','scale','rotation','crop','cropRatio','keyframes','autoZoom','popUp','aiBackgroundRemoval','backgroundRemovalMode','animationStart','animationDuration'])delete c[k];Object.assign(c,original);}else layoutSubject(c,{...cfg,mode:'face'});
     delete c.scene;delete c.viewRect;continue;
    }
-   const originalPose=c.scene?.originalPose||Object.fromEntries(['x','y','width','height','baseWidth','baseHeight','scale','rotation','crop','cropRatio','keyframes','autoZoom','popUp','aiBackgroundRemoval','animationStart','animationDuration'].filter(k=>c[k]!==undefined).map(k=>[k,structuredClone(c[k])]));
+   const originalPose=c.scene?.originalPose||Object.fromEntries(['x','y','width','height','baseWidth','baseHeight','scale','rotation','crop','cropRatio','keyframes','autoZoom','popUp','aiBackgroundRemoval','backgroundRemovalMode','animationStart','animationDuration'].filter(k=>c[k]!==undefined).map(k=>[k,structuredClone(c[k])]));
    if(!same)layoutSubject(c,cfg);
    else c.popUp={enabled:cfg.mode==='pip',duration:cfg.popup};
    const visualSourceOffset=existingId&&c.scene?.visualMediaId===cfg.visualMediaId?(c.scene.visualSourceOffset??((c.timelineStart||0)-from)):(c.timelineStart||0)-from;
@@ -86,7 +86,7 @@ const SceneEngine=(()=>{
  function background(c,run,timeline){
   const scene=c.scene,media=state.mediaFiles.find(m=>m.id===scene.visualMediaId);if(!media)return [];
   const w=workspaceWidth(),h=workspaceHeight(),rect=scene.mode==='split'?{x:0,y:h*(scene.faceHeight??.30),width:w,height:h*(1-(scene.faceHeight??.30))}:{x:0,y:0,width:w,height:h};
-  const pose=cover(media,rect,scene.bgX,scene.bgY),base={...pose,mediaId:media.id,type:media.type,trackIndex:1,zIndex:(c.zIndex||0)-.5,muted:!scene.visualAudio,volume:scene.visualVolume??1,sceneOwner:c.id,viewRect:rect,crop:{},keyframes:[],autoZoom:{enabled:!!scene.zoom,percent:scene.zoom},animationStart:run.start,animationDuration:run.end-run.start};
+  const pose=cover(media,rect,scene.bgX,scene.bgY),zoom=Math.max(.1,Math.min(5,(scene.bgZoom??100)/100));applyPose(pose,{centerX:pose.x+pose.width/2+(scene.bgOffsetX||0)*rect.width,centerY:pose.y+pose.height/2+(scene.bgOffsetY||0)*rect.height,scale:zoom,rotation:0});const base={...pose,mediaId:media.id,type:media.type,trackIndex:1,zIndex:(c.zIndex||0)-.5,muted:!scene.visualAudio,volume:scene.visualVolume??1,sceneOwner:c.id,viewRect:rect,crop:{},keyframes:[],autoZoom:{enabled:!!scene.zoom,percent:scene.zoom},animationStart:run.start,animationDuration:run.end-run.start};
   // A replacement background follows the whole scene clock, across technical audio cuts.
   const at=c.timelineStart||0,span=duration(c),offset=scene.visualSourceOffset??(at-run.start);
   if(media.type==='image')return [{...base,id:c.id+'~fond',startTime:0,endTime:span,timelineStart:at}];
@@ -105,9 +105,9 @@ const SceneEngine=(()=>{
  }
  function subjectRuns(timeline){
   const result=[];let previous=null;
-  for(const c of [...timeline].filter(c=>clipTrack(c)===0).sort((a,b)=>(a.timelineStart||0)-(b.timelineStart||0))){
+  for(const c of [...timeline].sort((a,b)=>clipTrack(a)-clipTrack(b)||(a.timelineStart||0)-(b.timelineStart||0))){
    const last=result.at(-1),samePose=previous&&['x','y','width','height','rotation'].every(k=>Math.abs((previous[k]||0)-(c[k]||0))<.001);
-   const linked=previous?.scene?.mode==='pip'&&c.scene?.mode==='pip'&&(previous.scene.id===c.scene.id||(c.scene.continuous&&samePose));
+   const linked=previous&&clipTrack(previous)===clipTrack(c)&&previous.scene?.mode==='pip'&&c.scene?.mode==='pip'&&(previous.scene.id===c.scene.id||(c.scene.continuous&&samePose));
    if(last&&linked&&Math.abs(last.end-(c.timelineStart||0))<.025){last.clips.push(c);last.end=end(c);}else result.push({start:c.timelineStart||0,end:end(c),clips:[c]});previous=c;
   }
   return result;
@@ -140,14 +140,14 @@ const SceneEngine=(()=>{
 })();
 window.SceneEngine=SceneEngine;
 window.syncSceneEdits=()=>{
- const active=state.timeline.find(c=>c.id===state.activeClipId);if(!active?.scene||clipTrack(active)!==0)return;
+ const active=state.timeline.find(c=>c.id===state.activeClipId);if(!active?.scene)return;
  const pose=layerPose(active),settings=active.scene;
  if(active.popUp)settings.popup=active.popUp.duration;
- for(const c of state.timeline){if(c===active||c.scene?.id!==settings.id||clipTrack(c)!==0)continue;
+ for(const c of state.timeline){if(c===active||c.scene?.id!==settings.id||clipTrack(c)!==clipTrack(active))continue;
   const original=c.scene.originalPose,visualSourceOffset=c.scene.visualSourceOffset,freezeVisual=c.scene.freezeVisual;c.scene={...structuredClone(settings),originalPose:original,visualSourceOffset,freezeVisual};
   applyPose(c,{...pose,scale:pose.scale*active.baseHeight/c.baseHeight});
   for(const key of ['crop','cropRatio','popUp','autoZoom'])if(active[key]!==undefined)c[key]=structuredClone(active[key]);
   c.keyframes=(active.keyframes||[]).map(k=>({...structuredClone(k),scale:k.scale*active.baseHeight/c.baseHeight}));
-  if(c.type==='video')c.aiBackgroundRemoval=active.aiBackgroundRemoval;
+  if(c.type==='video'){c.aiBackgroundRemoval=active.aiBackgroundRemoval;c.backgroundRemovalMode=active.backgroundRemovalMode;}
  }
 };

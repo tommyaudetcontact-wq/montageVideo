@@ -107,7 +107,7 @@ async function initPresetControls(){
    const c=active(),preset=presets.find(p=>p.id===byId('preset-list').value);if(!c)return showToast('Sélectionnez un calque.');if(!preset)return;
    pausePlayback();const group=c.groupId&&state.groups[c.groupId],clips=group?.kind==='sequence'?state.timeline.filter(x=>x.groupId===c.groupId):[c];
    const targets=window.editTargets?.(c)||clips,groups=new Set();
-   for(const x of targets){const grouped=x.groupId&&state.groups[x.groupId]?.kind==='sequence',span=grouped?groupRange(x.groupId,state.timeline):{start:x.timelineStart||0,duration:x.endTime-x.startTime};applyClipPreset(preset,x,span);greenScreenProcessor.frames.delete(x.id);if(grouped){groups.add(x.groupId);x.autoZoom={enabled:false,percent:15};}}
+   for(const x of targets){const grouped=x.groupId&&state.groups[x.groupId]?.kind==='sequence',span=grouped?groupRange(x.groupId,state.timeline):{start:x.timelineStart||0,duration:x.endTime-x.startTime};applyClipPreset(preset,x,span);greenScreenProcessor.frames.delete(x.id);if(grouped){groups.add(x.groupId);x.autoZoom={enabled:false,from:0,percent:35};}}
    for(const id of groups)state.groups[id].autoZoom=structuredClone(preset.autoZoom);
    state.editPoseClipId=null;pushState();renderTimeline();renderCanvasFrame();greenScreenProcessor.updateSlidersUI(c);byId('preset-status').textContent='« '+preset.name+' » appliqué · durée adaptée.';
  };

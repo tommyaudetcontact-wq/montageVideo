@@ -47,7 +47,7 @@ document.addEventListener('DOMContentLoaded',()=>{
  function restore(){for(const {node,parent,next} of moved){parent.insertBefore(node,next?.parentNode===parent?next:null);node.hidden=true;}moved=[];}
  function open(title,nodes){
    restore();byId('tool-title').textContent=title;
-   dialog.querySelector('.dialog-hint').textContent=nodes.some(node=>node.classList.contains('export-settings'))?'Ces réglages s’appliquent à l’export du projet.':'Les réglages s’appliquent immédiatement au calque sélectionné.';
+   dialog.querySelector('.dialog-hint').textContent=nodes.some(node=>node.classList.contains('export-settings'))?'Ces réglages s’appliquent à l’export du projet.':nodes.some(node=>node.id==='project-settings')?'Gérez vos montages et conservez une copie complète sur votre appareil.':'Les réglages s’appliquent immédiatement au calque sélectionné.';
    for(const node of nodes){moved.push({node,parent:node.parentNode,next:node.nextSibling});content.appendChild(node);node.hidden=false;if(node.tagName==='DETAILS')node.open=true;node.classList.add('show');}
    if(active())greenScreenProcessor.updateSlidersUI(active());refreshAnimationPanel();if(!dialog.open)dialog.showModal();
  }
@@ -63,7 +63,7 @@ document.addEventListener('DOMContentLoaded',()=>{
  const showAnimation=kind=>{
    if(!requireClip())return;
    keyPanel.hidden=kind!=='keys';autoField.hidden=kind!=='auto';popField.hidden=kind!=='pop';
-   open(kind==='keys'?'Keyframes':kind==='auto'?'Auto zoom · 0 % → zoom final':'Animation · pop-up',[animation]);
+   open(kind==='keys'?'Keyframes':kind==='auto'?'Auto zoom · départ → arrivée':'Animation · pop-up',[animation]);
  };
  // A hold is intercepted before any existing click listener receives the release click.
  function hold(id,show,click){
@@ -78,22 +78,23 @@ document.addEventListener('DOMContentLoaded',()=>{
    b.title='Cliquer : appliquer · Maintenir : réglages · Maj+Entrée : réglages';
  }
  byId('edit-clip-btn').onclick=()=>{const c=requireClip();if(c){pausePlayback();state.editPoseClipId=c.id;open('Modifier clip · position, zoom et rotation',[byId('pip-sliders-panel')]);renderCanvasFrame();}};
- hold('toggle-ai',()=>open('Affiner le détourage',[document.querySelector('.ai-settings')]));
+ hold('toggle-ai',()=>open('Affiner le détourage humain',[document.querySelector('.ai-settings')]));
+ hold('background-remover-btn',()=>open('Affiner Background remover · objets',[document.querySelector('.ai-settings')]));
  byId('btn-animations').onclick=null;
  hold('btn-animations',()=>showAnimation('pop'),()=>{
    const c=requireClip();if(!c)return;const targets=members(c).filter(x=>x.aiBackgroundRemoval);if(!targets.length)return showToast('Activez le détourage du calque pour le pop-up.');
    pausePlayback();for(const x of targets)x.popUp={enabled:true,duration:0.25};state.editPoseClipId=null;commit();showToast('Pop-up appliqué · 0,25 s.');
  });
  hold('keyframes-btn',()=>showAnimation('keys'),()=>window.toggleSelectedKeyframes?.());
- hold('btn-autocut-clip',()=>open('AutoCut · piste principale',[byId('autocut-settings')]));byId('auto-keyframes-btn').onclick=()=>{const c=requireClip();if(!c)return;for(const x of members(c)){const target=x.groupId&&state.groups[x.groupId]||x;target.autoZoom={enabled:true,percent:target.autoZoom?.percent??15};}commit();showAnimation('auto');};
+ hold('btn-autocut-clip',()=>open('AutoCut · piste principale',[byId('autocut-settings')]));byId('auto-keyframes-btn').onclick=()=>{const c=requireClip();if(!c)return;for(const x of members(c)){const target=x.groupId&&state.groups[x.groupId]||x;target.autoZoom={enabled:true,from:target.autoZoom?.from??0,percent:target.autoZoom?.percent??35};}commit();showAnimation('auto');};
  // Settings apply on input; no checkbox-plus-Apply workflow.
  byId('apply-popup').hidden=true;byId('apply-autozoom').hidden=true;
  const savePop=()=>{const c=requireClip();if(!c)return;const duration=Number(byId('popup-duration').value);if(!Number.isFinite(duration)||duration<0.05||duration>3600)return;
    pausePlayback();for(const x of members(c).filter(x=>x.aiBackgroundRemoval))x.popUp={enabled:byId('popup-enabled').checked,duration};commit();};
- const saveAuto=()=>{const c=requireClip();if(!c)return;const percent=Number(byId('autozoom-percent').value);if(!Number.isFinite(percent)||percent< -95||percent>1000)return;
-   for(const x of members(c)){const target=x.groupId&&state.groups[x.groupId]||x;target.autoZoom={enabled:byId('autozoom-enabled').checked,percent};}pausePlayback();commit();};
+ const saveAuto=()=>{const c=requireClip();if(!c)return;const percent=Number(byId('autozoom-percent').value),from=Number(byId('autozoom-from').value);if(!Number.isFinite(percent)||!Number.isFinite(from)||Math.min(from,percent)<-95||Math.max(from,percent)>1000)return;
+   for(const x of members(c)){const target=x.groupId&&state.groups[x.groupId]||x;target.autoZoom={enabled:byId('autozoom-enabled').checked,from,percent};}pausePlayback();commit();};
  byId('popup-enabled').onchange=savePop;byId('popup-duration').oninput=()=>{byId('popup-enabled').checked=true;savePop();};
- byId('autozoom-enabled').onchange=saveAuto;byId('autozoom-percent').oninput=()=>{byId('autozoom-enabled').checked=true;saveAuto();};
+ byId('autozoom-enabled').onchange=saveAuto;byId('autozoom-from').oninput=byId('autozoom-percent').oninput=()=>{byId('autozoom-enabled').checked=true;saveAuto();};
  byId('volume-btn').onclick=()=>{const c=requireClip();if(!c)return;byId('clip-volume').value=(c.volume??1)*100;byId('clip-volume-number').value=(c.volume??1)*100;open('Volume · amplification',[byId('volume-settings')]);};
  for(const id of ['clip-volume','clip-volume-number'])byId(id).oninput=()=>{
    const c=requireClip(),value=Number(byId(id).value);if(!c||!Number.isFinite(value)||value<0||value>1000)return;

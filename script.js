@@ -207,7 +207,7 @@ function renderCanvasFrame() {
     const targetTime = window.SceneEngine?SceneEngine.sourceTime(clip,previewTime):clip.startTime+progress;
 
     if (clip.type === 'image') {
-      greenScreenProcessor.drawClipToCanvas(canvasCtx, media.element, clip, false);
+      greenScreenProcessor.drawClipToCanvas(canvasCtx, media.element, clip, !!clip.aiBackgroundRemoval);
     } else if (clip.type === 'video') {
       const owner=getPreviewOwner(clip,activeClips);
       const vid=getClipVideo(owner,media);usedPlayers.add(vid);

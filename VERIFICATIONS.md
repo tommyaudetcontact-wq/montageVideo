@@ -54,3 +54,26 @@ Affichage et interactions mobiles testés dans un cadre de navigateur de 390 px 
 - Régressions : rognage, poignées et ripple, ordre et profondeur des pistes, duplication/gel, cache des masques, préréglages, animations, mixage et décalage audio, forme d’onde.
 
 Les essais ont été exécutés sur PC dans Chromium. Le chargement tardif du modèle, le worker monofil et sa libération limitent la charge mobile ; aucune mesure matérielle sur Pixel 9 n’a été effectuée ici.
+
+
+### 2.2.0 — 21 octobre 2026
+
+- Branche de secours publiée avant modification :
+  `backup/avant-modifications-2026-10-21` → `fea20c0`.
+- Tests Node : `editor-220.cjs`, `popout.cjs`, `mobile-export.cjs`.
+- Chromium : changement de piste B-roll par événements pointeur, maintien de la
+  profondeur/heure et suivi du curseur ; repère aimanté et alignement exact.
+- Clavier : Espace démarre/met en pause, flèches avancent/reculent, Backspace
+  supprime la sélection et ne supprime aucun clip pendant la saisie.
+- Auto zoom : interpolation 0→35 et 10→50, conservation des anciens réglages.
+- Illustrer : fond à 125 %, X +10 %, Y −5 %, réglages restaurés dans le dialogue ;
+  scène déplacée sur piste secondaire avec son fond.
+- Fichier `.pocketcut` : sources binaires relues, médias remappés sans collision,
+  nouveau projet restauré, annuler/rétablir testés, fichier tronqué/invalide rejeté.
+- U²-NetP réel : photo de vélo avec alpha, préréglage du mode objet, puis vidéo
+  synthétique d’un vélo mobile. Précalcul final et MP4 réellement produits.
+  Inspection PyAV : H.264 Constrained Baseline, 720×1280, 30 i/s, 24 images,
+  images clés 0/10/20. Caches humain/objet séparés.
+- Régression : vrai sujet humain issu d’une vidéo source, masque final non vide
+  avec fond transparent et personne conservée.
+- Tests de navigateur sur PC ; pas de mesure sur un Pixel 9 physique.

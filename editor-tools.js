@@ -116,14 +116,14 @@ function makeClipPreset(clip,name){
    keys=[{time:0,...normalizedPresetPose(clip,manualPose(clip,start))},...clip.keyframes.filter(k=>k.time+range.start>start+1e-6&&k.time+range.start<start+duration-1e-6).map(k=>({time:(k.time+range.start-start)/duration,...normalizedPresetPose(clip,k)})),{time:1,...normalizedPresetPose(clip,manualPose(clip,start+duration))}];
  }
  const group=clip.groupId&&state.groups[clip.groupId];
- return {id:globalThis.crypto?.randomUUID?.()||'preset_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2),version:1,name:name.trim(),createdAt:Date.now(),pose:normalizedPresetPose(clip,layerPose(clip)),keyframes:keys,crop:normalizeCrop(clip.crop),cropRatio:clip.cropRatio||'free',autoZoom:structuredClone(group?.autoZoom||clip.autoZoom||{enabled:false,percent:15}),popUp:{enabled:!!clip.popUp?.enabled,fraction:Math.min(clip.popUp?.duration||.25,duration/2)/duration},aiBackgroundRemoval:!!clip.aiBackgroundRemoval,volume:clip.volume??1,muted:!!clip.muted,audioOffset:clip.audioOffset||0};
+ return {id:globalThis.crypto?.randomUUID?.()||'preset_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2),version:1,name:name.trim(),createdAt:Date.now(),pose:normalizedPresetPose(clip,layerPose(clip)),keyframes:keys,crop:normalizeCrop(clip.crop),cropRatio:clip.cropRatio||'free',autoZoom:structuredClone(group?.autoZoom||clip.autoZoom||{enabled:false,from:0,percent:35}),popUp:{enabled:!!clip.popUp?.enabled,fraction:Math.min(clip.popUp?.duration||.25,duration/2)/duration},backgroundRemovalMode:clip.backgroundRemovalMode||'human',aiBackgroundRemoval:!!clip.aiBackgroundRemoval,volume:clip.volume??1,muted:!!clip.muted,audioOffset:clip.audioOffset||0};
 }
 function applyClipPreset(preset,clip,span={start:clip.timelineStart||0,duration:clip.endTime-clip.startTime}){
  const pose=p=>({centerX:p.centerX*workspaceWidth(),centerY:p.centerY*workspaceHeight(),scale:p.height*workspaceHeight()/clip.baseHeight,rotation:p.rotation});
  applyPose(clip,pose(preset.pose));clip.cropRatio=preset.cropRatio||'free';clip.crop=fitCropRatio(preset.crop,clip.cropRatio,clip.baseWidth/clip.baseHeight);clip.keyframes=preset.keyframes.map(k=>({time:k.time*span.duration,...pose(k)}));
  clip.animationStart=span.start;clip.animationDuration=span.duration;
  clip.autoZoom=structuredClone(preset.autoZoom);clip.popUp={enabled:preset.popUp.enabled,duration:Math.max(.05,preset.popUp.fraction*span.duration)};
- clip.aiBackgroundRemoval=clip.type==='video'&&preset.aiBackgroundRemoval;clip.volume=preset.volume;clip.muted=preset.muted;clip.audioOffset=preset.audioOffset;
+ clip.backgroundRemovalMode=preset.backgroundRemovalMode||'human';clip.aiBackgroundRemoval=(clip.type==='video'||clip.backgroundRemovalMode==='object')&&preset.aiBackgroundRemoval;clip.volume=preset.volume;clip.muted=preset.muted;clip.audioOffset=preset.audioOffset;
  return clip;
 }
 document.addEventListener('DOMContentLoaded',()=>{
