@@ -81,22 +81,28 @@ class GreenScreenProcessor {
         const final=!!cached?.final||!options.draft;
         const previous=this.frames.get(clip.id);
         // An older rapid task must not overwrite a final mask loaded in the meantime.
-        if(final||!previous?.final||!window.PocketCutMasks?.hasFinal?.(clip.mediaId,time,clip.backgroundRemovalMode))this.frames.set(clip.id,{canvas:output,mask:safeMask,time,paired:true,final,mode:clip.backgroundRemovalMode});
+        if(final||!previous?.final||!window.PocketCutMasks?.hasFinal?.(clip.mediaId,time,clip.backgroundRemovalMode))this.rememberFrame(clip.id,{canvas:output,mask:safeMask,time,paired:true,final,mode:clip.backgroundRemovalMode,still:clip.type==='image'});
       }
       temporaryMask?.close();this.status(cached?'Détourage précalculé · lecture depuis le cache':clip.backgroundRemovalMode==='object'?'Background remover actif · objet':'Détourage actif · personne');
       return output;
     });
     this.queue=task; return task;
   }
+  rememberFrame(id,frame) {
+    this.frames.delete(id);this.frames.set(id,frame);
+    const limit=/Android|iPhone|iPad/i.test(navigator.userAgent)?3:8;
+    const stills=[...this.frames].filter(([,f])=>f.still);
+    while(stills.length>limit){const [old]=stills.shift();this.frames.delete(old);}
+  }
   processFrameFast(video, clip) {
-    if(clip.type==='image'){const frame=this.frames.get(clip.id),key=maskSettingsKey();if(frame?.mode===clip.backgroundRemovalMode&&frame.settings===key)return frame.canvas;if(!this.pending.has(clip.id)){this.pending.add(clip.id);this.prepareFrame(video,clip,{time:0}).then(()=>{const f=this.frames.get(clip.id);if(f)f.settings=key;requestAnimationFrame(renderCanvasFrame);}).catch(e=>{if(e.name!=='AbortError')this.status(e.message);}).finally(()=>this.pending.delete(clip.id));}return null;}
+    if(clip.type==='image'){const frame=this.frames.get(clip.id),key=maskSettingsKey();if(frame?.mode===clip.backgroundRemovalMode&&frame.settings===key){this.rememberFrame(clip.id,frame);return frame.canvas;}if(!this.pending.has(clip.id)){this.pending.add(clip.id);this.prepareFrame(video,clip,{time:0}).then(()=>{const f=this.frames.get(clip.id);if(f)f.settings=key;requestAnimationFrame(renderCanvasFrame);}).catch(e=>{if(e.name!=='AbortError')this.status(e.message);}).finally(()=>this.pending.delete(clip.id));}return null;}
     if(video.readyState<2) return null;
     const presentedTime=video.pocketFrameTime??video.currentTime;
     const cached=window.PocketCutMasks?.preview(clip.mediaId,presentedTime,clip.backgroundRemovalMode);
     if(cached && (this.frames.get(clip.id)?.time!==cached.time||this.frames.get(clip.id)?.cachedMask!==cached.mask)) {
       const old=this.frames.get(clip.id),mask=old?.mask instanceof HTMLCanvasElement?old.mask:document.createElement('canvas');
       if(mask.width!==cached.mask.width||mask.height!==cached.mask.height){mask.width=cached.mask.width;mask.height=cached.mask.height;}
-      const ctx=mask.getContext('2d');ctx.clearRect(0,0,mask.width,mask.height);ctx.drawImage(cached.mask,0,0);this.frames.set(clip.id,{mask,time:cached.time,duration:cached.duration,cachedMask:cached.mask,final:cached.final,mode:clip.backgroundRemovalMode});
+      const ctx=mask.getContext('2d');ctx.clearRect(0,0,mask.width,mask.height);ctx.drawImage(cached.mask,0,0);this.rememberFrame(clip.id,{mask,time:cached.time,duration:cached.duration,cachedMask:cached.mask,final:cached.final,mode:clip.backgroundRemovalMode});
     }
     const candidate=this.frames.get(clip.id),frame=candidate&&((candidate.mode||'human')===(clip.backgroundRemovalMode||'human'))?candidate:null;
     const finalAvailable=window.PocketCutMasks?.hasFinal?.(clip.mediaId,presentedTime,clip.backgroundRemovalMode);
