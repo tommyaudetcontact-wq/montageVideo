@@ -127,3 +127,22 @@ Tests : `tests/editor-220.cjs`, `tests/popout.cjs`, `tests/mobile-export.cjs` ;
 aller-retour réel médias/historique dans Chromium ; gestes de déplacement et
 export MP4 HD du mode objet. L’export mobile garde H.264 Baseline, 30 i/s,
 images clés tous les 10 frames. Aucun test physique Pixel 9 effectué.
+
+
+## Version 2.2.1 — qualité d’export
+
+- Qualité renforcée dans les deux modes : cible QP 18 lorsqu’elle est prise en
+  charge, sinon débit variable renforcé (14 Mbit/s en HD, 28 Mbit/s en 1080p à
+  30 i/s). Le poids réel dépend du navigateur et du contenu ; il peut augmenter.
+- Encodage hors temps réel. Standard utilise H.264 High et une image clé toutes
+  les 2 secondes. Retouches mobile garde Baseline, 30 i/s et les images clés tous
+  les 10 frames. Les paramètres choisis dans les projets sont conservés.
+- Conversion explicite de la composition RGB vers YUV I420 Rec.709 SDR en plage
+  limitée. Les niveaux sont réellement convertis ; les données YUV d’une source
+  pleine plage ne sont pas simplement réétiquetées. Le MP4 est marqué BT.709 pour
+  les primaires, le transfert et la matrice. Le chemin de lecture des sources
+  reste inchangé. La validation porte sur des sources SDR BT.709.
+- Un seul tampon YUV est réutilisé pour l’export. Les fichiers et projets locaux,
+  leur adresse de stockage, la version IndexedDB et l’historique ne changent pas.
+- Avant d’actualiser une fenêtre contenant un montage important, Projets →
+  Sauvegarder le projet permet de conserver une copie `.pocketcut` avec ses médias.

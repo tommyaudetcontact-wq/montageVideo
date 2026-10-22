@@ -13,10 +13,10 @@ function resolveExportSettings({sourceWidth,sourceHeight,ratio,resolution,mode='
   const edge=resolution==='720'?720:resolution==='1080'?1080:mobile?Math.min(sourceEdge,1080):sourceEdge;
   const width=Math.ceil((ratio>=1?edge*ratio:edge)/2)*2,height=Math.ceil((ratio>=1?edge:edge/ratio)/2)*2;
   fps=mobile?30:fps;
-  const bitrate=mobile?(width*height<=720*1280?7000000:10000000):Math.round(Math.max(12000000,width*height*fps*.24));
-  const macroblocks=Math.ceil(width/16)*Math.ceil(height/16),level=macroblocks<=3600?31:macroblocks<=8192?40:macroblocks<=8704?42:macroblocks<=22080?50:52;
-  const encoder=mobile?{fullCodecString:'avc1.42e0'+level.toString(16),latencyMode:'realtime',bitrateMode:'constant'}:{};
-  return {mobile,width,height,fps,bitrate,encoder,keyframeFrames:mobile?10:Math.max(1,Math.round(fps/3))};
+  const bitrate=Math.round(Math.max(width*height<=720*1280?14000000:28000000,width*height*fps*.45));
+  const macroblocks=Math.ceil(width/16)*Math.ceil(height/16),levels=[[31,3600,108000,14000000],[32,5120,216000,20000000],[40,8192,245760,20000000],[42,8704,522240,50000000],[50,22080,589824,135000000],[51,36864,983040,240000000],[52,36864,2073600,240000000]],level=(levels.find(([,size,rate,limit])=>macroblocks<=size&&macroblocks*fps<=rate&&bitrate<=limit*(mobile?1:1.25))||levels.at(-1))[0];
+  const encoder={fullCodecString:(mobile?'avc1.42e0':'avc1.6400')+level.toString(16),latencyMode:'quality',bitrateMode:'variable'};
+  return {mobile,width,height,fps,bitrate,quantizer:18,encoder,keyframeFrames:mobile?10:Math.max(1,Math.round(fps*2))};
 }
 function refreshExportOptions(restoring=false) {
   const mode=document.getElementById('export-mode'),fps=document.getElementById('export-fps');if(!mode||!fps)return;
@@ -25,7 +25,7 @@ function refreshExportOptions(restoring=false) {
   if(!mobile&&fps.disabled&&restoring!==true)fps.value=fps.dataset.standardValue||'0';
   fps.disabled=mobile;
   document.querySelector('#export-resolution option[value="source"]').textContent=mobile?'Source · maximum 1080p':'Originale (source)';
-  document.getElementById('export-mode-hint').textContent=mobile?'MP4 pour retouches mobile : 30 i/s fixes, H.264 Baseline, images clés tous les 10 frames. En définition source, la sortie est limitée à 1080p.':'MP4 standard : définition et cadence au choix, audio AAC.';
+  document.getElementById('export-mode-hint').textContent=mobile?'Retouches mobile : qualité renforcée, couleurs Rec.709 SDR, 30 i/s, H.264 Baseline et images clés tous les 10 frames. Source limitée à 1080p. Les fichiers peuvent être plus volumineux.':'Standard : haute qualité H.264 High, couleurs Rec.709 SDR, définition et cadence au choix. Images clés toutes les 2 s. Audio AAC.';
 }
 if(typeof document!=='undefined')document.addEventListener('DOMContentLoaded',()=>{document.getElementById('export-mode')?.addEventListener('change',refreshExportOptions);refreshExportOptions();});
 async function createExportDestination(B,duration,bitrate){
@@ -88,7 +88,7 @@ async function exportProject() {
     }
     const settings=resolveExportSettings({sourceWidth,sourceHeight,ratio:workspaceWidth()/workspaceHeight(),resolution:document.getElementById('export-resolution').value,mode,fps});
     const {width,height,bitrate}=settings;fps=settings.fps;
-    const quality=new B.Quality({bitrate});
+    const quality=new B.Quality({quantizer:settings.quantizer,bitrate,bitrateMode:'variable'});
     if(!await B.canEncodeVideo('avc',{width,height,frameRate:fps,quality,...settings.encoder})) throw new Error(settings.mobile?`Export retouches mobile H.264 Baseline ${width} × ${height} indisponible sur ce navigateur. Essayez 720p ou choisissez le mode Standard.`:`H.264 ${width} × ${height} à ${fps.toFixed(2)} i/s non pris en charge sur cet appareil. Essayez 720p / 30 i/s.`);
     const audible=project.filter(c=>c.type==='video' && !c.muted && inputs.get(c.mediaId).audioTrack);
     if(audible.length && !await B.canEncodeAudio('aac',{numberOfChannels:2,sampleRate:48000})) {
@@ -97,12 +97,13 @@ async function exportProject() {
       registerAacEncoder();
     }
     const canvas=document.createElement('canvas'); canvas.width=width;canvas.height=height;
-    const ctx=canvas.getContext('2d',{alpha:false}); ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+    const ctx=canvas.getContext('2d',{alpha:false,colorSpace:'srgb',willReadFrequently:true}); ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
     exportStatus('Préparation du fichier MP4…');
     const destination=await createExportDestination(B,duration,bitrate);
     const target=destination.target;exportDirectory=destination.directory;exportFile=destination.file;exportFileKey=destination.key;exportWriter=destination.writer;
     output=new B.Output({format:new B.Mp4OutputFormat({fastStart:'reserve'}),target});
-    videoSource=new B.CanvasSource(canvas,{codec:'avc',quality,...settings.encoder,keyFrameInterval:settings.keyframeFrames/fps});
+    const colorBuffer=new Uint8Array(width*height*3/2);
+    videoSource=new B.VideoSampleSource({codec:'avc',quality,...settings.encoder,keyFrameInterval:settings.keyframeFrames/fps});
     output.addVideoTrack(videoSource,{frameRate:fps,maximumPacketCount:Math.ceil(duration*fps)+2});
     if(audible.length){audioSource=new B.AudioSampleSource({codec:'aac',quality:new B.Quality({bitrate:192000})});output.addAudioTrack(audioSource,{maximumPacketCount:Math.ceil(duration*48000/960)+10});}
     await output.start();
@@ -112,7 +113,8 @@ async function exportProject() {
       checkExportCancelled();
       const time=index/fps, frameDuration=settings.mobile?1/fps:Math.min(1/fps,duration-time);
       await renderOfflineFrame(ctx,canvas,project,inputs,time,exportGroups);
-      await videoSource.add(time,frameDuration,{keyFrame:index%settings.keyframeFrames===0});
+      const sample=createExportSample(B,ctx,width,height,time,frameDuration,colorBuffer);
+      try{await videoSource.add(sample,{keyFrame:index%settings.keyframeFrames===0});}finally{sample.close();}
       if(audioSource)await prepareExportAudioWindow(audible,time,frameDuration,inputs,B);
       // Audio follows the same project clock; speed of computation is irrelevant.
       if(audioSource) {
@@ -137,7 +139,7 @@ async function exportProject() {
     const blob=new Blob([exportFile?await exportFile.getFile():output.target.buffer],{type:'video/mp4'});
     const url=URL.createObjectURL(blob); const a=document.createElement('a');a.href=url;a.download=`pocketcut-${settings.mobile?'retouches-':''}${width}x${height}.mp4`;a.click();
     delivered=true;setTimeout(()=>{URL.revokeObjectURL(url);if(exportDirectory&&exportFileKey)exportDirectory.removeEntry(exportFileKey).catch(()=>{});},60000);
-    exportStatus(`MP4 ${settings.mobile?'retouches mobile ':''}prêt · ${width} × ${height} · ${fps.toFixed(2)} i/s · ${frameCount} images`);showToast('Export MP4 terminé.');
+    exportStatus(`MP4 ${settings.mobile?'retouches mobile ':''}prêt · ${width} × ${height} · ${fps.toFixed(2)} i/s · ${frameCount} images · Rec.709 SDR · haute qualité`);showToast('Export MP4 terminé.');
   } catch(e) {
     if(output && !['finalized','canceled'].includes(output.state)) await output.cancel().catch(()=>{});
     const message=e.name==='SecurityError'||e.name==='NotReadableError'?'Accès à un fichier interrompu ('+e.name+'). Réessayez après la sauvegarde locale. '+e.message:e.message;exportStatus(message);showToast(message);console.error('Export PocketCut',e);

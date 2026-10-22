@@ -77,3 +77,24 @@ Les essais ont été exécutés sur PC dans Chromium. Le chargement tardif du mo
 - Régression : vrai sujet humain issu d’une vidéo source, masque final non vide
   avec fond transparent et personne conservée.
 - Tests de navigateur sur PC ; pas de mesure sur un Pixel 9 physique.
+
+
+### 2.2.1 — 22 octobre 2026
+
+- Tests Node : mobile-export, export-color, editor-220, popout et restauration
+  de projets. Conversion des niveaux noir/blanc/gris, dimensions et tampon borné.
+- Source réelle HEVC 4K BT.709 full-range : comparaison HTMLVideo / CanvasSink,
+  mêmes pixels sur l’image mesurée, sans décalage des canaux. La piste HDR ne
+  s’applique pas à cette source SDR.
+- Exports réels avec voix : mobile + Standard, 720×1280 et 1080×1920, 30 i/s.
+  Inspection indépendante PyAV : Baseline / High, 60 images sur le test de 2 s,
+  audio AAC ; primaires, transfert et matrice BT.709, niveaux limités. Mode mobile :
+  images clés 0/10/20/30/40/50. Standard : image clé 0, intervalle demandé 2 s.
+- Comparaison 720p au même rendu avant compression, première image : PSNR témoin
+  33,65 dB ; nouveau mobile 37,30 dB ; Standard 37,32 dB. Ce chiffre décrit cet
+  extrait de test, pas une garantie pour toutes les vidéos ou tous les appareils.
+- Projet de test : timeline et historique inchangés après chaque export, fichier
+  .pocketcut créé, fermeture/réouverture et annulations conservées. Stockage de
+  production non modifié pendant ces vérifications, réalisées sur un autre port.
+- Pas de test sur Pixel 9 physique. Les pixels des sources et des montages de
+  l’utilisateur ne sont pas publiés dans le dépôt GitHub.
