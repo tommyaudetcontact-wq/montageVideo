@@ -98,3 +98,10 @@ Les essais ont été exécutés sur PC dans Chromium. Le chargement tardif du mo
   production non modifié pendant ces vérifications, réalisées sur un autre port.
 - Pas de test sur Pixel 9 physique. Les pixels des sources et des montages de
   l’utilisateur ne sont pas publiés dans le dépôt GitHub.
+
+### 2.2.2 — 27 octobre 2026
+
+- Tests audio : attente décodage/contexte/play, départ rogné exact, annulation, décalages conservés, reprise du même lecteur et vidéos sans audio.
+- Tests existants audio aperçu/export, projets, calques et protocole Android réussis.
+- Navigateur réel, source HEVC/AAC : son mesuré dès les 180 premières millisecondes, prochain clip préchargé puis lu, lecteur réutilisé après pause. Origine de test séparée des projets utilisateur.
+- APK 2.2.2-test.2 compilé avec lint, signature identique à Test 1, alignement et manifeste vérifiés. Pas de test sur Pixel 9 physique.

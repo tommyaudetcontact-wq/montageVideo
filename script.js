@@ -254,6 +254,7 @@ async function startPlayback(options={}) {
   if(playText)playText.textContent='Préparation…';
   try {
     const active=(window.SceneEngine?SceneEngine.expand(state.timeline):state.timeline).filter(c=>state.currentTime>=(c.timelineStart||0)&&state.currentTime<(c.timelineStart||0)+c.endTime-c.startTime);
+    const audioReady=window.preparePreviewAudio?.(active,state.currentTime,()=>request===playbackRequest)||Promise.resolve();audioReady.catch(()=>{});
     const synced=new Set(),frozenPlayers=new Set();
     for(const clip of active.filter(c=>c.type==='video'&&!c.hideVisual)) {
       const media=state.mediaFiles.find(m=>m.id===clip.mediaId),owner=getPreviewOwner(clip,active),v=getClipVideo(owner,media);
@@ -267,10 +268,11 @@ async function startPlayback(options={}) {
       if(request!==playbackRequest)return;
     }
     if(request!==playbackRequest)return;
+    await audioReady;if(request!==playbackRequest)return;
     state.isPlaying=true;playbackTimestamp=null;
     if(playIcon)playIcon.className='bi bi-pause-fill fs-6';if(playText)playText.textContent='Pause';
-    // All readers begin together after the first mask is ready.
-    await Promise.all([...synced].filter(v=>!frozenPlayers.has(v)).map(v=>v.play().catch(()=>{})));
+    // Start the prepared audio and video together; the timeline waits for both play promises.
+    await Promise.all([...[...synced].filter(v=>!frozenPlayers.has(v)).map(v=>v.play()),window.startPreviewAudio?.(active,state.currentTime,()=>request===playbackRequest)]);
     if(request!==playbackRequest)return;
     window.syncPreviewAudio?.(active,state.currentTime);playbackTimestamp=performance.now();
     if(animFrameId)cancelAnimationFrame(animFrameId);animFrameId=requestAnimationFrame(playbackLoop);

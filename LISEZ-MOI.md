@@ -146,3 +146,13 @@ images clés tous les 10 frames. Aucun test physique Pixel 9 effectué.
   leur adresse de stockage, la version IndexedDB et l’historique ne changent pas.
 - Avant d’actualiser une fenêtre contenant un montage important, Projets →
   Sauvegarder le projet permet de conserver une copie `.pocketcut` avec ses médias.
+
+
+## Version 2.2.2 — lecture audio
+
+La lecture attend le réveil du contexte audio, le chargement et le positionnement
+sur la première image audio, puis le démarrage effectif des lecteurs avant de
+lancer l’horloge de la timeline. Les lecteurs audio sont conservés après une
+pause et les deux clips à venir sont préparés en avance. Les décalages audio,
+le volume, les coupes et les données des projets restent inchangés. Les vidéos
+sans piste audio sont détectées et ne bloquent pas la lecture.
