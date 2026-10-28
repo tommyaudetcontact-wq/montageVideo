@@ -160,3 +160,7 @@ sans piste audio sont détectées et ne bloquent pas la lecture.
 ### 2.2.3 — 28 octobre 2026
 
 Téléchargement Android sur android.html et bouton dans le studio. APK Test 3 avec vérification des mises à jour, bouton manuel, contrôle du fichier et de la signature, sauvegarde du projet avant installation. Installer une première fois par-dessus Test 1 ou Test 2, sans désinstaller.
+
+### Android 2.2.4 — galerie
+
+Les imports visuels ouvrent la galerie Android, avec sélection multiple et filtres image/vidéo. Les fichiers .pocketcut gardent le sélecteur de documents. Même paquet et signature, installer par-dessus.

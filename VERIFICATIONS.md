@@ -109,3 +109,7 @@ Les essais ont été exécutés sur PC dans Chromium. Le chargement tardif du mo
 ### 2.2.3 — 28 octobre 2026
 
 APK compilé et lint réussi ; même paquet et certificat que Test 1/2, alignement 16 Kio vérifié. Tests : 15 cas du flux (URL HTTPS, parcours, paquet, version, checksum et limites), transfert natif réussi. Vérification de la page et du téléchargement public. Aucun test d’installation sur Pixel 9 physique.
+
+### Android 2.2.4 — 28 octobre 2026
+
+Compilation et lint Android réussis, même signature et paquet, alignement vérifié. Test du transfert natif réussi. Photo Picker Android 13+, galerie GET_CONTENT en repli, documents conservés pour les projets. Pas de test sur Pixel 9 physique.

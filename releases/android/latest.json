@@ -1,9 +1,9 @@
 {
   "packageId": "com.pocketcut.studio.test",
-  "versionCode": 220303,
-  "versionName": "2.2.3-test.3",
-  "url": "https://tommyaudetcontact-wq.github.io/montageVideo/releases/android/PocketCut-2.2.3-test3.apk",
-  "size": 28574859,
-  "sha256": "71814763bb49b98d8ebec39cfde3f2fde0c87efc9ca425aee35b138382649437",
-  "notes": "Première version avec vérification des mises à jour et installation guidée. Comprend la correction du démarrage audio. Vos projets sont conservés."
+  "versionCode": 220404,
+  "versionName": "2.2.4-test.4",
+  "url": "https://tommyaudetcontact-wq.github.io/montageVideo/releases/android/PocketCut-2.2.4-test4.apk",
+  "size": 28522113,
+  "sha256": "261072e6f9831ac50192be926e5210f118b939a8ad3444dc83a6a8eb6e67af05",
+  "notes": "Ouverture directe de la galerie Android pour choisir les photos et vidéos, sélection multiple et filtres adaptés aux boutons. Projets conservés."
 }
