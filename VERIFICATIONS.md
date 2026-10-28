@@ -105,3 +105,7 @@ Les essais ont été exécutés sur PC dans Chromium. Le chargement tardif du mo
 - Tests existants audio aperçu/export, projets, calques et protocole Android réussis.
 - Navigateur réel, source HEVC/AAC : son mesuré dès les 180 premières millisecondes, prochain clip préchargé puis lu, lecteur réutilisé après pause. Origine de test séparée des projets utilisateur.
 - APK 2.2.2-test.2 compilé avec lint, signature identique à Test 1, alignement et manifeste vérifiés. Pas de test sur Pixel 9 physique.
+
+### 2.2.3 — 28 octobre 2026
+
+APK compilé et lint réussi ; même paquet et certificat que Test 1/2, alignement 16 Kio vérifié. Tests : 15 cas du flux (URL HTTPS, parcours, paquet, version, checksum et limites), transfert natif réussi. Vérification de la page et du téléchargement public. Aucun test d’installation sur Pixel 9 physique.

@@ -156,3 +156,7 @@ lancer l’horloge de la timeline. Les lecteurs audio sont conservés après une
 pause et les deux clips à venir sont préparés en avance. Les décalages audio,
 le volume, les coupes et les données des projets restent inchangés. Les vidéos
 sans piste audio sont détectées et ne bloquent pas la lecture.
+
+### 2.2.3 — 28 octobre 2026
+
+Téléchargement Android sur android.html et bouton dans le studio. APK Test 3 avec vérification des mises à jour, bouton manuel, contrôle du fichier et de la signature, sauvegarde du projet avant installation. Installer une première fois par-dessus Test 1 ou Test 2, sans désinstaller.

@@ -1,0 +1,9 @@
+{
+  "packageId": "com.pocketcut.studio.test",
+  "versionCode": 220303,
+  "versionName": "2.2.3-test.3",
+  "url": "https://tommyaudetcontact-wq.github.io/montageVideo/releases/android/PocketCut-2.2.3-test3.apk",
+  "size": 28574859,
+  "sha256": "71814763bb49b98d8ebec39cfde3f2fde0c87efc9ca425aee35b138382649437",
+  "notes": "Première version avec vérification des mises à jour et installation guidée. Comprend la correction du démarrage audio. Vos projets sont conservés."
+}
