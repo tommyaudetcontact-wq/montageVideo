@@ -113,3 +113,7 @@ APK compilé et lint réussi ; même paquet et certificat que Test 1/2, aligneme
 ### Android 2.2.4 — 28 octobre 2026
 
 Compilation et lint Android réussis, même signature et paquet, alignement vérifié. Test du transfert natif réussi. Photo Picker Android 13+, galerie GET_CONTENT en repli, documents conservés pour les projets. Pas de test sur Pixel 9 physique.
+
+### 2.2.5 — 29 octobre 2026
+
+Tests Node : débordement et lecture sans perte, limite RAM/disque, annulation, quota, récupération des caches abandonnés et isolation des projets. Navigateur réel : plafond artificiel 1 Mo, débordement CacheStorage puis comparaison exacte de 262 144 valeurs alpha ; aucune perte. Tests projets et audio existants réussis. APK compilé avec lint, signature et alignement vérifiés ; pas de test sur Pixel 9 physique.

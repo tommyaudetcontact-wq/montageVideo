@@ -1,9 +1,9 @@
 {
   "packageId": "com.pocketcut.studio.test",
-  "versionCode": 220404,
-  "versionName": "2.2.4-test.4",
-  "url": "https://tommyaudetcontact-wq.github.io/montageVideo/releases/android/PocketCut-2.2.4-test4.apk",
-  "size": 28522113,
-  "sha256": "261072e6f9831ac50192be926e5210f118b939a8ad3444dc83a6a8eb6e67af05",
-  "notes": "Ouverture directe de la galerie Android pour choisir les photos et vidéos, sélection multiple et filtres adaptés aux boutons. Projets conservés."
+  "versionCode": 220505,
+  "versionName": "2.2.5-test.5",
+  "url": "https://tommyaudetcontact-wq.github.io/montageVideo/releases/android/PocketCut-2.2.5-test5.apk",
+  "size": 28523990,
+  "sha256": "8f524b8fb642b25dc87a2ea5a75290a9a3be317c274445fd6416ab3a03ff3929",
+  "notes": "Cache IA amélioré : les masques précalculés passent en stockage temporaire quand la RAM réservée est pleine, sans perte de qualité. Les projets restent séparés et conservés."
 }

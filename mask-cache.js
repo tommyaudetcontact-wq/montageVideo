@@ -1,6 +1,7 @@
 'use strict';
 // Session-local cache of source-space alpha masks. Transforms never invalidate it.
 const cutoutRecords=new Map();
+let maskStorageQueue=Promise.resolve();
 let maskCacheBytes=0,maskCacheGeneration=0,maskPreloadTimer=null,maskPreloadRunning=false,maskPreloadRestart=false;
 const MASK_MOBILE=typeof navigator!=='undefined'&&(/Android|iPhone|iPad/i.test(navigator.userAgent)||navigator.userAgentData?.mobile);
 const MASK_CACHE_LIMIT=(MASK_MOBILE?64:128)*1024*1024;
@@ -29,8 +30,9 @@ async function decodeCachedMask(record,entry) {
   if(record.decoded.has(entry.at)){const value=record.decoded.get(entry.at);record.decoded.delete(entry.at);record.decoded.set(entry.at,value);return value;}
   if(record.decoding.has(entry.at))return record.decoding.get(entry.at);
   const generation=maskCacheGeneration;
-  const job=createImageBitmap(entry.blob).then(bitmap=>{
-    if(generation!==maskCacheGeneration){bitmap.close();return null;}
+  const job=(async()=>{const blob=entry.blob||await maskSpillStore.get(entry.spill);if(!blob)return null;entry.lastUse=Date.now();return createImageBitmap(blob);})().then(bitmap=>{
+    if(!bitmap)return null;
+    if(generation!==maskCacheGeneration||record.discarded){bitmap.close();return null;}
     record.decoded.set(entry.at,bitmap);
     while(record.decoded.size>(MASK_MOBILE?3:8)){const candidate=[...record.decoded].find(([key])=>key!==record.previewAt);if(!candidate)break;const [key,old]=candidate;record.decoded.delete(key);old.close();}
     boundDecodedMasks(bitmap);return bitmap;
@@ -85,8 +87,7 @@ async function ensureClipCutout(clip,options={}) {
         const copied=document.createElement('canvas');copied.width=Math.round(wrapped.canvas.width*factor);copied.height=Math.round(wrapped.canvas.height*factor);
         const context=copied.getContext('2d');context.imageSmoothingQuality='high';context.drawImage(wrapped.canvas,0,0,copied.width,copied.height);
         const task=(async()=>{const blob=await (clip.backgroundRemovalMode==='object'?objectRemover:cutoutWorkerPool).segment(copied,{draft:options.draft});check();
-        if(maskCacheBytes+blob.size>MASK_CACHE_LIMIT)throw new Error('Cache IA rempli · aperçu rapide disponible ; qualité finale calculée à l’export.');
-        const entry={at,blob,duration:wrapped.duration||1/30};record.entries.set(stamp,entry);maskCacheBytes+=blob.size;computed++;
+        const entry={at,blob,duration:wrapped.duration||1/30};await retainCompressedMask(record,stamp,entry,generation);check();computed++;
         insertMaskEntry(record,entry);
         if(computed===1)await decodeCachedMask(record,entry);
         record.report?.({progress:clamp01((at-record.first-start)/Math.max(0.001,end-start)),count:computed,name:media.file.name});
@@ -97,7 +98,7 @@ async function ensureClipCutout(clip,options={}) {
       // Capture the frame covering a trimmed start, then traverse actual native frames (including VFR).
       await consume(await sink.getCanvas(start+record.first));
       for await(const wrapped of sink.canvases(start+record.first,end+record.first))await consume(wrapped);
-      await Promise.all(pending);check();record.ranges=mergeMaskRanges(record.ranges,{start,end});
+      await Promise.all(pending);check();record.ranges=mergeMaskRanges(record.ranges,{start,end});if(!options.draft)releaseCompletedDraft(key,record);
       record.report?.({progress:1,count:computed,name:media.file.name});return record;
     } finally {input.dispose();}
   })();
@@ -107,7 +108,7 @@ async function ensureClipCutout(clip,options={}) {
 function clearCutoutCache() {
   maskCacheGeneration++;
   for(const record of cutoutRecords.values())for(const mask of record.decoded.values())mask.close();
-  cutoutRecords.clear();maskCacheBytes=0;greenScreenProcessor.frames.clear();if(typeof objectRemover!=='undefined')objectRemover.clear();
+  cutoutRecords.clear();maskCacheBytes=0;maskSpillStore.clear();greenScreenProcessor.frames.clear();if(typeof objectRemover!=='undefined')objectRemover.clear();
 }
 function scheduleCutoutPreload() {
   if(maskPreloadRunning)maskPreloadRestart=true;
@@ -142,3 +143,24 @@ function insertMaskEntry(record,entry){const last=record.sorted.at(-1);if(!last|
 function boundDecodedMasks(protectedMask){const limit=MASK_MOBILE?8:24;let count=0;for(const record of cutoutRecords.values())count+=record.decoded.size;for(const record of cutoutRecords.values())for(const [key,mask] of record.decoded){if(count<=limit)return;if(mask===protectedMask||(key===record.previewAt&&Date.now()-(record.previewAccess||0)<250))continue;record.decoded.delete(key);mask.close();count--;}}
 
 function maskEntryMatches(entry,time){const at=entry?.at??entry?.time;return Number.isFinite(at)&&time>=at-.00001&&time<at+(entry.duration||1/30)-.000001;}
+
+async function retainCompressedMask(record,stamp,entry,generation){
+ const task=maskStorageQueue.catch(()=>{}).then(async()=>{
+  const check=()=>{if(generation!==maskCacheGeneration)throw new DOMException('Détourage annulé.','AbortError');};check();
+  while(maskCacheBytes+entry.blob.size>MASK_CACHE_LIMIT){
+   let victim=null;
+   for(const r of cutoutRecords.values())for(const e of r.entries.values())if(e.blob&&(!victim||(e.lastUse||0)<(victim.lastUse||0)))victim=e;
+   if(!victim)throw Error('Préparation limitée par l’espace disponible. La qualité finale sera calculée à l’export.');
+   const payload=victim.blob,ref=await maskSpillStore.put(payload);check();
+   if(!ref)throw Error('Cache temporaire limité par l’espace disponible. Le projet est sauvegardé séparément ; l’export conserve la qualité choisie.');
+   if(victim.blob===payload){maskCacheBytes-=payload.size;victim.spill=ref;victim.blob=null;}else await maskSpillStore.remove(ref);
+  }
+  check();record.entries.set(stamp,entry);maskCacheBytes+=entry.blob.size;
+ });maskStorageQueue=task;return task;
+}
+function releaseCompletedDraft(key,final){
+ const name=key+'|draft',draft=cutoutRecords.get(name);
+ if(!draft||draft.job||!draft.ranges.every(d=>final.ranges.some(f=>f.start<=d.start+.00001&&f.end>=d.end-.00001)))return;
+ draft.discarded=true;for(const entry of draft.entries.values()){if(entry.blob){maskCacheBytes-=entry.blob.size;entry.blob=null;}if(entry.spill)maskSpillStore.remove(entry.spill).catch(()=>{});}
+ for(const bitmap of draft.decoded.values())bitmap.close();cutoutRecords.delete(name);
+}

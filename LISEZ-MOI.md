@@ -164,3 +164,7 @@ Téléchargement Android sur android.html et bouton dans le studio. APK Test 3 a
 ### Android 2.2.4 — galerie
 
 Les imports visuels ouvrent la galerie Android, avec sélection multiple et filtres image/vidéo. Les fichiers .pocketcut gardent le sélecteur de documents. Même paquet et signature, installer par-dessus.
+
+### 2.2.5 — 29 octobre 2026
+
+Cache IA : les masques compressés dépassant la limite RAM passent dans un cache local temporaire borné, sans modifier leur alpha. Les aperçus rapides sont libérés quand les masques finaux les remplacent. Les caches des onglets encore ouverts sont protégés ; les caches abandonnés sont récupérés. Les projets et médias sauvegardés sont séparés et ne sont pas supprimés. Si le stockage temporaire est indisponible ou plein, la préparation est limitée et l’export recalcule en qualité choisie.
