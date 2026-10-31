@@ -4,7 +4,7 @@ const SceneEngine=(()=>{
  const duration=c=>Math.max(0,c.endTime-c.startTime);
  const end=c=>(c.timelineStart||0)+duration(c);
  const uid=prefix=>prefix+'_'+crypto.randomUUID();
- const defaults={placementVersion:2,mode:'pip',layout:'right',zoom:35,faceY:.47,faceHeight:.30,popup:.25,visualAudio:false,narrationAudio:true,shortVideo:'freeze',bgX:.5,bgY:.5,bgOffsetX:0,bgOffsetY:0,bgZoom:100};
+ const defaults={placementVersion:2,mode:'pip',layout:'right',zoom:35,faceY:.47,faceHeight:.30,popup:.25,popupEnabled:true,visualAudio:false,narrationAudio:true,shortVideo:'freeze',bgX:.5,bgY:.5,bgOffsetX:0,bgOffsetY:0,bgZoom:100};
  function runs(timeline){
   const result=[];
   for(const c of [...timeline].sort((a,b)=>clipTrack(a)-clipTrack(b)||(a.timelineStart||0)-(b.timelineStart||0))){
@@ -24,7 +24,7 @@ const SceneEngine=(()=>{
   const w=workspaceWidth(),h=workspaceHeight(),rect={x:0,y:0,width:w,height:h};
   const media=state.mediaFiles.find(m=>m.id===c.mediaId);
   delete c.viewRect;c.crop={};c.cropRatio='free';c.keyframes=[];delete c.animationStart;delete c.animationDuration;
-  c.autoZoom={enabled:false,from:0,percent:35};c.popUp={enabled:settings.mode==='pip',duration:settings.popup};
+  c.autoZoom={enabled:false,from:0,percent:35};c.popUp={enabled:settings.mode==='pip'&&settings.popupEnabled!==false,duration:settings.popup};
   c.aiBackgroundRemoval=settings.mode==='pip'&&c.type==='video';c.backgroundRemovalMode='human';
   if(settings.mode==='split'){
    const top={...rect,height:h*(settings.faceHeight??.30)},pose=cover(media,top);pose.y=top.height/2-(settings.faceY??.47)*pose.height;Object.assign(c,pose);c.viewRect=top;
@@ -75,7 +75,7 @@ const SceneEngine=(()=>{
    }
    const originalPose=c.scene?.originalPose||Object.fromEntries(['x','y','width','height','baseWidth','baseHeight','scale','rotation','crop','cropRatio','keyframes','autoZoom','popUp','aiBackgroundRemoval','backgroundRemovalMode','animationStart','animationDuration'].filter(k=>c[k]!==undefined).map(k=>[k,structuredClone(c[k])]));
    if(!same)layoutSubject(c,cfg);
-   else c.popUp={enabled:cfg.mode==='pip',duration:cfg.popup};
+   else c.popUp={enabled:cfg.mode==='pip'&&cfg.popupEnabled!==false,duration:cfg.popup};
    const visualSourceOffset=existingId&&c.scene?.visualMediaId===cfg.visualMediaId?(c.scene.visualSourceOffset??((c.timelineStart||0)-from)):(c.timelineStart||0)-from;
    c.scene={...structuredClone(cfg),id,originalPose,visualSourceOffset};
   }
@@ -113,7 +113,7 @@ const SceneEngine=(()=>{
   const result=[];let previous=null;
   for(const c of [...timeline].sort((a,b)=>clipTrack(a)-clipTrack(b)||(a.timelineStart||0)-(b.timelineStart||0))){
    const last=result.at(-1),samePose=previous&&['x','y','width','height','rotation'].every(k=>Math.abs((previous[k]||0)-(c[k]||0))<.001);
-   const linked=previous&&clipTrack(previous)===clipTrack(c)&&previous.scene?.mode==='pip'&&c.scene?.mode==='pip'&&(previous.scene.id===c.scene.id||(c.scene.continuous&&samePose));
+   const linked=previous&&!!previous.popUp?.enabled===!!c.popUp?.enabled&&clipTrack(previous)===clipTrack(c)&&previous.scene?.mode==='pip'&&c.scene?.mode==='pip'&&(previous.scene.id===c.scene.id||(c.scene.continuous&&samePose));
    if(last&&linked&&Math.abs(last.end-(c.timelineStart||0))<.025){last.clips.push(c);last.end=end(c);}else result.push({start:c.timelineStart||0,end:end(c),clips:[c]});previous=c;
   }
   return result;
@@ -140,7 +140,7 @@ const SceneEngine=(()=>{
  }
  function applyComposition(record,targets){
   const from=Math.min(...targets.map(c=>c.timelineStart||0)),to=Math.max(...targets.map(end));
-  for(const c of targets){const old=c.scene;if(!old)continue;c.scene={...old,...structuredClone(record.settings)};layoutSubject(c,c.scene);applyClipPreset(record.subject,c,{start:from,duration:to-from});c.scene.originalPose=old.originalPose;c.scene.popup=c.popUp?.duration||c.scene.popup;}
+  for(const c of targets){const old=c.scene;if(!old)continue;c.scene={...old,...structuredClone(record.settings)};layoutSubject(c,c.scene);applyClipPreset(record.subject,c,{start:from,duration:to-from});c.scene.originalPose=old.originalPose;if(c.popUp)c.popUp.enabled=c.scene.mode==='pip'&&c.scene.popupEnabled!==false;c.scene.popup=c.popUp?.duration||c.scene.popup;}
  }
  return {defaults,upgrade,runs,subjectRuns,rangeFor,cover,backgroundFrame,apply,expand,sourceTime,composition,applyComposition,duration,end};
 })();
@@ -148,7 +148,7 @@ window.SceneEngine=SceneEngine;
 window.syncSceneEdits=()=>{
  const active=state.timeline.find(c=>c.id===state.activeClipId);if(!active?.scene)return;
  const pose=layerPose(active),settings=active.scene;
- if(active.popUp)settings.popup=active.popUp.duration;
+ if(active.popUp){settings.popup=active.popUp.duration;settings.popupEnabled=active.popUp.enabled;}
  for(const c of state.timeline){if(c===active||c.scene?.id!==settings.id||clipTrack(c)!==clipTrack(active))continue;
   const original=c.scene.originalPose,visualSourceOffset=c.scene.visualSourceOffset,freezeVisual=c.scene.freezeVisual;c.scene={...structuredClone(settings),originalPose:original,visualSourceOffset,freezeVisual};
   applyPose(c,{...pose,scale:pose.scale*active.baseHeight/c.baseHeight});
