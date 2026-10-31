@@ -4,7 +4,7 @@ const SceneEngine=(()=>{
  const duration=c=>Math.max(0,c.endTime-c.startTime);
  const end=c=>(c.timelineStart||0)+duration(c);
  const uid=prefix=>prefix+'_'+crypto.randomUUID();
- const defaults={placementVersion:2,mode:'pip',layout:'right',zoom:35,faceY:.47,faceHeight:.30,popup:.25,popupEnabled:true,visualAudio:false,narrationAudio:true,shortVideo:'freeze',bgX:.5,bgY:.5,bgOffsetX:0,bgOffsetY:0,bgZoom:100};
+ const defaults={placementVersion:2,mode:'pip',layout:'right',zoomFrom:0,zoom:35,faceY:.47,faceHeight:.30,popup:.25,popupEnabled:true,visualAudio:false,narrationAudio:true,shortVideo:'freeze',bgX:.5,bgY:.5,bgOffsetX:0,bgOffsetY:0,bgZoom:100};
  function runs(timeline){
   const result=[];
   for(const c of [...timeline].sort((a,b)=>clipTrack(a)-clipTrack(b)||(a.timelineStart||0)-(b.timelineStart||0))){
@@ -76,11 +76,19 @@ const SceneEngine=(()=>{
    const originalPose=c.scene?.originalPose||Object.fromEntries(['x','y','width','height','baseWidth','baseHeight','scale','rotation','crop','cropRatio','keyframes','autoZoom','popUp','aiBackgroundRemoval','backgroundRemovalMode','animationStart','animationDuration'].filter(k=>c[k]!==undefined).map(k=>[k,structuredClone(c[k])]));
    if(!same)layoutSubject(c,cfg);
    else c.popUp={enabled:cfg.mode==='pip'&&cfg.popupEnabled!==false,duration:cfg.popup};
-   const visualSourceOffset=existingId&&c.scene?.visualMediaId===cfg.visualMediaId?(c.scene.visualSourceOffset??((c.timelineStart||0)-from)):(c.timelineStart||0)-from;
-   c.scene={...structuredClone(cfg),id,originalPose,visualSourceOffset};
+   const visualSourceOffset=Number.isFinite(cfg.backgroundSourceStart)?cfg.backgroundSourceStart+(c.timelineStart||0)-from:existingId&&c.scene?.visualMediaId===cfg.visualMediaId?(c.scene.visualSourceOffset??((c.timelineStart||0)-from)):(c.timelineStart||0)-from;
+   c.scene={...structuredClone(cfg),id,originalPose,visualSourceOffset};delete c.scene.backgroundSourceStart;
   }
   state.activeClipId=targets[0]?.id||null;
   return targets;
+ }
+ function previousBackground(from,track=0){
+  const previous=state.timeline.filter(c=>clipTrack(c)===track&&end(c)<=from+.001).sort((a,b)=>end(b)-end(a))[0];
+  if(!previous?.scene)throw Error('Le clip précédent ne possède pas de fond illustré.');
+  const run=runs(state.timeline).find(r=>r.clips.includes(previous)),s=previous.scene;
+  const progress=Math.max(0,Math.min(1,(end(previous)-run.start)/(run.end-run.start)));
+  const zoomFrom=(s.zoomFrom||0)+((s.zoom||0)-(s.zoomFrom||0))*progress;
+  return Object.assign(Object.fromEntries(['visualMediaId','bgX','bgY','bgOffsetX','bgOffsetY','bgZoom','zoomFocus','shortVideo','visualAudio'].filter(k=>s[k]!==undefined).map(k=>[k,structuredClone(s[k])])),{zoomFrom,backgroundSourceStart:(s.visualSourceOffset??((previous.timelineStart||0)-run.start))+duration(previous)});
  }
  function sourceTime(c,time){return c.freezeAt??(c.startTime+time-(c.timelineStart||0));}
  function backgroundFrame(scene){
@@ -92,7 +100,7 @@ const SceneEngine=(()=>{
  }
  function background(c,run,timeline){
   const scene=c.scene,media=state.mediaFiles.find(m=>m.id===scene.visualMediaId);if(!media)return [];
-  const {rect,pose}=backgroundFrame(scene);const base={...pose,mediaId:media.id,type:media.type,trackIndex:1,zIndex:(c.zIndex||0)-.5,muted:!scene.visualAudio,volume:scene.visualVolume??1,sceneOwner:c.id,viewRect:rect,crop:{},keyframes:[],autoZoom:{enabled:!!scene.zoom,percent:scene.zoom,focus:scene.zoomFocus},animationStart:run.start,animationDuration:run.end-run.start};
+  const {rect,pose}=backgroundFrame(scene);const base={...pose,mediaId:media.id,type:media.type,trackIndex:1,zIndex:(c.zIndex||0)-.5,muted:!scene.visualAudio,volume:scene.visualVolume??1,sceneOwner:c.id,viewRect:rect,crop:{},keyframes:[],autoZoom:{enabled:!!scene.zoom||!!scene.zoomFrom,from:scene.zoomFrom??0,percent:scene.zoom,focus:scene.zoomFocus},animationStart:run.start,animationDuration:run.end-run.start};
   // A replacement background follows the whole scene clock, across technical audio cuts.
   const at=c.timelineStart||0,span=duration(c),offset=scene.visualSourceOffset??(at-run.start);
   if(media.type==='image')return [{...base,id:c.id+'~fond',startTime:0,endTime:span,timelineStart:at}];
@@ -142,7 +150,7 @@ const SceneEngine=(()=>{
   const from=Math.min(...targets.map(c=>c.timelineStart||0)),to=Math.max(...targets.map(end));
   for(const c of targets){const old=c.scene;if(!old)continue;c.scene={...old,...structuredClone(record.settings)};layoutSubject(c,c.scene);applyClipPreset(record.subject,c,{start:from,duration:to-from});c.scene.originalPose=old.originalPose;if(c.popUp)c.popUp.enabled=c.scene.mode==='pip'&&c.scene.popupEnabled!==false;c.scene.popup=c.popUp?.duration||c.scene.popup;}
  }
- return {defaults,upgrade,runs,subjectRuns,rangeFor,cover,backgroundFrame,apply,expand,sourceTime,composition,applyComposition,duration,end};
+ return {defaults,upgrade,runs,subjectRuns,rangeFor,cover,backgroundFrame,previousBackground,apply,expand,sourceTime,composition,applyComposition,duration,end};
 })();
 window.SceneEngine=SceneEngine;
 window.syncSceneEdits=()=>{
