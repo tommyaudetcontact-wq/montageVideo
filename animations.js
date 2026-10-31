@@ -37,7 +37,15 @@ function autoZoomFactor(percent,time,start,duration,from=0){const a=Number(from)
 function animatedClip(clip,time,groups={},timeline=[]) {
   const pose=manualPose(clip,time),range=animationRange(clip),local=time-range.start;
   let scale=pose.scale,cx=pose.centerX,cy=pose.centerY,opacity=1;
-  if(clip.autoZoom?.enabled) scale*=autoZoomFactor(clip.autoZoom.percent,time,range.start,range.duration,clip.autoZoom.from);
+  if(clip.autoZoom?.enabled) {
+    const zoom=autoZoomFactor(clip.autoZoom.percent,time,range.start,range.duration,clip.autoZoom.from);
+    const focus=clip.autoZoom.focus;
+    if(focus&&Number.isFinite(focus.x)&&Number.isFinite(focus.y)){
+      const pivotX=pose.centerX+(focus.x-.5)*clip.baseWidth*pose.scale,pivotY=pose.centerY+(focus.y-.5)*clip.baseHeight*pose.scale;
+      cx=pivotX+(cx-pivotX)*zoom;cy=pivotY+(cy-pivotY)*zoom;
+    }
+    scale*=zoom;
+  }
   if(clip.popUp?.enabled) {
     const edge=Math.min(Math.max(0.05,clip.popUp.duration||0.25),range.duration/2);
     const enter=clamp01(local/edge),exit=clamp01((range.duration-local)/edge);
@@ -73,9 +81,14 @@ function updateKeyframeFromEdit(clip) {
   if(clip.keyframes?.length) captureLayerKeyframe(clip,state.currentTime);
 }
 function prepareLayerEdit(clip) {if(clip.keyframes?.length)applyPose(clip,manualPose(clip,state.currentTime));}
-function retainSplitAnimation(original,left,right) {
+function retainSplitAnimation(original,left,right,{independent=false}={}) {
   const range=animationRange(original);
   for(const clip of [left,right]) {clip.animationStart=range.start;clip.animationDuration=range.duration;clip.keyframes=structuredClone(original.keyframes||[]);if(original.scene)clip.scene={...structuredClone(original.scene),visualSourceOffset:(original.scene.visualSourceOffset||0)+clip.startTime-original.startTime};}
+  if(independent)for(const clip of [left,right]){
+    if(clip.scene)clip.scene.id='scene_'+crypto.randomUUID();
+    // Explicitly split clips no longer share mutable settings or group edits.
+    delete clip.groupId;
+  }
 }
 function fullHeightPose(width,height) {
   const h=workspaceHeight(),w=h*(width||720)/(height||1280);

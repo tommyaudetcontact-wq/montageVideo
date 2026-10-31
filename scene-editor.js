@@ -1,5 +1,5 @@
 'use strict';
-let sceneMediaBusy=false;
+let sceneMediaBusy=false,sceneZoomFocus=null,sceneFocusGeneration=0;
 function selectedNarration(){
  const chosen=typeof editTargets==='function'?editTargets():[];
  const active=state.timeline.find(c=>c.id===state.activeClipId);return chosen.filter(c=>clipTrack(c)===0||(active?.scene&&clipTrack(c)===clipTrack(active)));
@@ -43,11 +43,35 @@ async function prepareSceneSubjectThumbnail(media,clip,canvas,generation){
  }finally{if(video){video.pause();video.removeAttribute('src');video.load();}greenScreenProcessor.frames.delete(clip.id+'~galerie');}
 }
 const sceneById=id=>document.getElementById(id);
-function sceneConfig(){return {mode:sceneById('scene-mode').value,layout:sceneById('scene-layout').value,visualMediaId:sceneById('scene-media').value,faceY:Number(sceneById('scene-face-y').value)/100,faceHeight:Number(sceneById('scene-face-height').value)/100,zoom:Number(sceneById('scene-zoom').value),popup:Number(sceneById('scene-popup').value),shortVideo:sceneById('scene-short').value,visualAudio:sceneById('scene-visual-audio').checked,continuous:sceneById('scene-continuity').checked,narrationAudio:sceneById('scene-voice').checked,bgZoom:Number(sceneById('scene-bg-zoom').value),bgOffsetX:Number(sceneById('scene-bg-offset-x').value)/100,bgOffsetY:Number(sceneById('scene-bg-offset-y').value)/100,bgX:Number(sceneById('scene-bg-x').value)/100,bgY:Number(sceneById('scene-bg-y').value)/100};}
+function sceneConfig(){return {zoomFocus:sceneZoomFocus?{...sceneZoomFocus}:null,mode:sceneById('scene-mode').value,layout:sceneById('scene-layout').value,visualMediaId:sceneById('scene-media').value,faceY:Number(sceneById('scene-face-y').value)/100,faceHeight:Number(sceneById('scene-face-height').value)/100,zoom:Number(sceneById('scene-zoom').value),popup:Number(sceneById('scene-popup').value),shortVideo:sceneById('scene-short').value,visualAudio:sceneById('scene-visual-audio').checked,continuous:sceneById('scene-continuity').checked,narrationAudio:sceneById('scene-voice').checked,bgZoom:Number(sceneById('scene-bg-zoom').value),bgOffsetX:Number(sceneById('scene-bg-offset-x').value)/100,bgOffsetY:Number(sceneById('scene-bg-offset-y').value)/100,bgX:Number(sceneById('scene-bg-x').value)/100,bgY:Number(sceneById('scene-bg-y').value)/100};}
 function fillSceneConfig(settings){
- const s={...SceneEngine.defaults,...settings};
+ const s={...SceneEngine.defaults,...settings};sceneZoomFocus=s.zoomFocus?{...s.zoomFocus}:null;closeSceneFocus();
  for(const [id,value] of Object.entries({'scene-face-y':s.faceY*100,'scene-face-height':s.faceHeight*100,'scene-mode':s.mode,'scene-layout':s.layout,'scene-zoom':s.zoom,'scene-popup':s.popup,'scene-short':s.shortVideo,'scene-bg-zoom':s.bgZoom,'scene-bg-offset-x':s.bgOffsetX*100,'scene-bg-offset-y':s.bgOffsetY*100,'scene-bg-x':s.bgX*100,'scene-bg-y':s.bgY*100}))sceneById(id).value=value;
  sceneById('scene-continuity').checked=!!s.continuous;sceneById('scene-visual-audio').checked=s.visualAudio;sceneById('scene-voice').checked=s.narrationAudio;sceneById('scene-media').value=s.visualMediaId||'';
+}
+function closeSceneFocus(){
+ sceneFocusGeneration++;const panel=sceneById('scene-focus-panel');if(panel)panel.hidden=true;
+ const button=sceneById('scene-focus');if(button)button.textContent=sceneZoomFocus?'◎ Modifier le point de zoom':'◎ Cibler le zoom sur le fond';
+}
+async function openSceneFocus(){
+ const media=state.mediaFiles.find(m=>m.id===sceneById('scene-media').value);
+ if(!media)return sceneById('scene-status').textContent='Choisissez d’abord une image ou une vidéo de fond.';
+ const canvas=sceneById('scene-focus-canvas'),generation=++sceneFocusGeneration;
+ sceneById('scene-focus-panel').hidden=false;sceneById('scene-status').textContent='Touchez le détail du fond vers lequel zoomer. Le pourcentage reste inchangé.';
+ let source=media.element,video;
+ try{
+  if(media.type==='video'){video=document.createElement('video');video.muted=true;video.playsInline=true;video.preload='auto';video.src=media.url;await waitForPreviewData(video);source=video;}
+  if(generation!==sceneFocusGeneration)return;
+  const {rect,pose}=SceneEngine.backgroundFrame(sceneConfig()),factor=Math.min(360/rect.width,420/rect.height);
+  canvas.width=Math.round(rect.width*factor);canvas.height=Math.round(rect.height*factor);
+  const snapshot=document.createElement('canvas');snapshot.width=canvas.width;snapshot.height=canvas.height;const preview=snapshot.getContext('2d');preview.drawImage(source,(pose.x-rect.x)*factor,(pose.y-rect.y)*factor,pose.width*factor,pose.height*factor);
+  const ctx=canvas.getContext('2d');
+  const draw=()=>{
+   ctx.fillStyle='#0b1726';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(snapshot,0,0);
+   if(sceneZoomFocus){const x=(pose.x+sceneZoomFocus.x*pose.width-rect.x)*factor,y=(pose.y+sceneZoomFocus.y*pose.height-rect.y)*factor;ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.beginPath();ctx.arc(x,y,10,0,Math.PI*2);ctx.moveTo(x-17,y);ctx.lineTo(x+17,y);ctx.moveTo(x,y-17);ctx.lineTo(x,y+17);ctx.stroke();}
+  };
+  canvas.onclick=e=>{const b=canvas.getBoundingClientRect(),x=rect.x+(e.clientX-b.left)/b.width*rect.width,y=rect.y+(e.clientY-b.top)/b.height*rect.height;sceneZoomFocus={x:Math.max(0,Math.min(1,(x-pose.x)/pose.width)),y:Math.max(0,Math.min(1,(y-pose.y)/pose.height))};sceneById('scene-focus').textContent='◎ Modifier le point de zoom';draw();sceneById('scene-status').textContent='Point choisi · appliquez au passage pour enregistrer.';};draw();sceneById('scene-focus-panel').scrollIntoView({block:'center',behavior:'smooth'});
+ }catch(e){sceneById('scene-status').textContent='Aperçu indisponible : '+e.message;}finally{if(video){video.pause();video.removeAttribute('src');video.load();}}
 }
 function sceneBackgroundMedia(selected=''){
  return state.mediaFiles.filter(m=>m.type==='image'||m.sceneBackground||m.id===selected||state.timeline.some(c=>c.scene?.visualMediaId===m.id));
@@ -57,6 +81,7 @@ function sceneMediaOptions(selected=''){
  for(const m of sceneBackgroundMedia(selected)){const option=new Option((m.type==='video'?'Vidéo · ':'Image · ')+(m.file?.name||m.name||'Média'),m.id);list.add(option);}list.value=selected;list.dataset.previous=selected;renderSceneGallery(selected);
 }
 function renderSceneGallery(selected=''){
+ closeSceneFocus();
  const grid=sceneById('scene-gallery');if(!grid)return;const add=sceneById('scene-add-media')||document.createElement('button');grid.replaceChildren();
  add.id='scene-add-media';add.type='button';add.className='scene-gallery-add';add.textContent='＋ Ajouter';add.setAttribute('aria-label','Ajouter depuis la galerie photo ou vidéo');add.onclick=()=>sceneById('scene-import').click();grid.appendChild(add);
  const active=state.timeline.find(c=>c.id===state.activeClipId),subject=active&&state.mediaFiles.find(m=>m.id===active.mediaId);
@@ -87,7 +112,7 @@ async function openSceneEditor(){
  const run=active?.scene&&SceneEngine.runs(state.timeline).find(r=>r.clips.some(c=>c.id===active.id));
  const clips=run?.clips||selected;editingSceneId=run?.id||null;
  sceneById('scene-from').value=Math.min(...clips.map(c=>c.timelineStart||0)).toFixed(3);sceneById('scene-to').value=Math.max(...clips.map(SceneEngine.end)).toFixed(3);
- sceneMediaOptions(active?.scene?.visualMediaId||'');fillSceneConfig(active?.scene||{});sceneById('scene-status').textContent='Le fond et le sujet suivent ce passage, même après une coupe.';
+ sceneMediaOptions(active?.scene?.visualMediaId||'');fillSceneConfig(active?.scene||{});sceneById('scene-status').textContent='Les réglages s’appliquent au passage indiqué ci-dessus.';
  sceneById('scene-composition-name').value='';
  sceneById('scene-dialog').showModal();
  try{await refreshScenePresets();}catch(e){sceneById('scene-status').textContent='Compositions locales indisponibles : '+e.message;}
@@ -104,9 +129,14 @@ document.addEventListener('DOMContentLoaded',()=>{
  <label>Présentation<select id="scene-mode"><option value="pip">Fond + moi détouré</option><option value="split">Écran partagé · moi en haut</option><option value="excerpt">Extrait seul</option><option value="face">Face caméra · retirer l’illustration</option></select></label>
  <label>Illustration<select id="scene-media"></select></label><div id="scene-gallery" aria-label="Galerie du projet"></div><button type="button" id="scene-add-media" class="scene-import">＋ Ajouter · galerie photo / vidéo</button><input id="scene-import" type="file" accept="image/*,video/*" hidden>
  <div class="scene-grid"><label>Placement du sujet<select id="scene-layout"><option value="right">En bas à droite · incliné</option><option value="left">En bas à gauche · incliné</option><option value="top-left">En haut à gauche · incliné</option><option value="top-right">En haut à droite · incliné</option><option value="straight-left">Droit en bas à gauche</option><option value="straight-right">Droit en bas à droite</option><option value="center">En bas au centre</option><option value="large">Réaction grand format</option></select></label><label>Zoom du fond (%)<input id="scene-zoom" type="number" min="0" max="100" step="1" value="35"></label><label>Pop-up entrée / sortie (s)<input id="scene-popup" type="number" min=".05" max="3" step=".05" value=".25"></label><label>Fond vidéo trop court<select id="scene-short"><option value="freeze">Geler la dernière image</option><option value="loop">Boucler la vidéo</option></select></label></div>
+ <button type="button" id="scene-focus">◎ Cibler le zoom sur le fond</button><div id="scene-focus-panel" hidden><p>Touchez le point à garder comme centre du zoom.</p><canvas id="scene-focus-canvas" aria-label="Touchez le point du fond vers lequel zoomer"></canvas></div><button type="button" id="scene-focus-reset">Revenir au zoom centré</button>
  <label class="scene-check"><input id="scene-continuity" type="checkbox"> Continuer le PIP précédent si sa pose est identique</label><details><summary>Options avancées · cadrage et audio</summary><div class="scene-grid"><label>Position X du fond (%)<input id="scene-bg-offset-x" type="number" min="-100" max="100" step="1" value="0"></label><label>Position Y du fond (%)<input id="scene-bg-offset-y" type="number" min="-100" max="100" step="1" value="0"></label><label>Taille du fond (%)<input id="scene-bg-zoom" type="number" min="10" max="500" step="1" value="100"></label></div><p>0 / 0 centre le fond. 100 % remplit le cadre ; l’auto zoom s’ajoute à ce cadrage.</p><label>Position verticale du visage · écran partagé<input id="scene-face-y" type="range" min="10" max="75" value="47"></label><label>Hauteur de la bande visage (%)<input id="scene-face-height" type="range" min="20" max="50" value="30"></label><label>Cadrage horizontal du fond<input id="scene-bg-x" type="range" min="0" max="100" value="50"></label><label>Cadrage vertical du fond<input id="scene-bg-y" type="range" min="0" max="100" value="50"></label><label class="scene-check"><input id="scene-voice" type="checkbox" checked> Garder ma voix</label><label class="scene-check"><input id="scene-visual-audio" type="checkbox"> Entendre le fond vidéo / l’extrait</label><p>Activez seulement l’extrait si vous voulez l’écouter sans votre narration. Un gel de fin est silencieux.</p></details>
  <details><summary>Mes compositions · disponibles dans tous mes projets V2</summary><select id="scene-presets" aria-label="Compositions personnelles"></select><button id="scene-load-preset">Utiliser cette composition</button><label>Nom de ma composition<input id="scene-composition-name" maxlength="100" placeholder="Moi incliné à gauche"></label><button id="scene-save-preset">Enregistrer la scène sélectionnée</button><p>Placez d’abord votre sujet avec les doigts ou « Modifier clip », puis enregistrez. Le prochain passage peut avoir une autre durée.</p></details>
  <p id="scene-status" role="status"></p><footer><button id="scene-apply" class="scene-cta">Appliquer au passage</button></footer>`;document.body.appendChild(dialog);
+ sceneById('scene-focus').onclick=openSceneFocus;
+ sceneById('scene-focus-reset').onclick=()=>{sceneZoomFocus=null;closeSceneFocus();sceneById('scene-status').textContent='Zoom centré rétabli · pourcentage inchangé.';};
+ dialog.addEventListener('close',closeSceneFocus);
+ for(const id of ['scene-mode','scene-face-height','scene-bg-zoom','scene-bg-offset-x','scene-bg-offset-y','scene-bg-x','scene-bg-y'])sceneById(id).addEventListener('input',closeSceneFocus);
  sceneById('scene-close').onclick=()=>dialog.close();sceneById('illustrate-btn').onclick=openSceneEditor;
  sceneById('scene-advanced-btn').onclick=()=>{const advanced=document.body.classList.toggle('v2-advanced');sceneById('scene-advanced-btn').setAttribute('aria-expanded',String(advanced));sceneById('scene-advanced-btn').textContent=advanced?'Masquer les outils':'Tous les outils';};
  sceneById('scene-media').onchange=e=>{if(e.target.value==='__gallery__'){e.target.value=e.target.dataset.previous||'';sceneById('scene-import').click();}else{e.target.dataset.previous=e.target.value;renderSceneGallery(e.target.value);}};

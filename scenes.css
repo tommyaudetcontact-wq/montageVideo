@@ -35,3 +35,5 @@
 .scene-gallery-subject{border:2px solid #bb9bff;background:repeating-conic-gradient(#182f4b 0% 25%,#213d58 0% 50%) 50%/16px 16px}.scene-gallery-subject canvas{width:100%;height:120px;object-fit:contain}.scene-gallery-subject .scene-gallery-name{background:#182d49}.scene-gallery-card{min-width:0}
 
 #autocut-progress{position:fixed;z-index:20000;left:12px;right:12px;bottom:12px;padding:16px;border-radius:14px;background:#153e64;color:white;display:flex;align-items:center;gap:12px;box-shadow:0 6px 30px #0008}#autocut-progress span{flex:1}
+
+#scene-focus-panel[hidden]{display:none}#scene-focus-canvas{display:block;max-width:100%;max-height:420px;margin:10px auto;cursor:crosshair;touch-action:manipulation;border:1px solid #83f4dc;border-radius:8px}

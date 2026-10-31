@@ -858,9 +858,9 @@ if (btnSplit) {
       const orig = state.timeline[clipIndex];
       const splitTime = orig.startTime + splitOffset;
 
-      const left = { ...orig, id: 'clip_' + Math.random().toString(36).substr(2, 9), endTime: splitTime };
-      const right = { ...orig, id: 'clip_' + Math.random().toString(36).substr(2, 9), startTime: splitTime, timelineStart: state.currentTime };
-      retainSplitAnimation(orig,left,right);
+      const left = { ...structuredClone(orig), id: 'clip_' + Math.random().toString(36).substr(2, 9), endTime: splitTime };
+      const right = { ...structuredClone(orig), id: 'clip_' + Math.random().toString(36).substr(2, 9), startTime: splitTime, timelineStart: state.currentTime };
+      retainSplitAnimation(orig,left,right,{independent:true});
       state.activeClipId=right.id;
 
       const currentScroll = timelineScrollContainer ? timelineScrollContainer.scrollLeft : 0;

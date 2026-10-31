@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <meta name="application-version" content="2.2.5">
+  <meta name="application-version" content="2.2.6">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <script type="importmap">{"imports":{"mediabunny":"https://cdn.jsdelivr.net/npm/mediabunny@1.61.4/dist/bundles/mediabunny.mjs"}}</script>
   <link rel="icon" href="data:,">
@@ -15,7 +15,7 @@
 
   <link rel="stylesheet" href="studio.css?v=210">
 <link rel="stylesheet" href="vita.css?v=210">
-<link rel="stylesheet" href="scenes.css?v=210"></head>
+<link rel="stylesheet" href="scenes.css?v=226"></head>
 <body class="vh-100 d-flex flex-column justify-content-between p-2 p-md-3">
 
   <!-- NAVBAR -->
@@ -150,14 +150,14 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="mask-refine.js?v=220"></script>
   <script src="segment-worker.js?v=220"></script><script src="object-worker.js?v=220"></script>
-  <script src="animations.js?v=220"></script><script src="crop-tools.js?v=220"></script><script src="timeline-trim.js?v=220"></script>
+  <script src="animations.js?v=226"></script><script src="crop-tools.js?v=220"></script><script src="timeline-trim.js?v=220"></script>
   <script src="mask-pool.js?v=220"></script>
   <script src="mask-storage.js?v=225"></script><script src="mask-cache.js?v=225"></script>
   <script src="greenscreen.js?v=2201"></script>
   <script src="export-color.js?v=221"></script><script src="export.js?v=221"></script>
-  <script src="script.js?v=222"></script>
+  <script src="script.js?v=226"></script>
   <script src="studio.js?v=220"></script>
 <section id="project-settings" hidden><p id="current-project-name"></p><nav class="project-modes" aria-label="Action sur les projets"><button type="button" data-project-mode="create" aria-pressed="false">＋ Créer</button><button type="button" data-project-mode="edit" aria-pressed="true">✎ Modifier</button><button type="button" data-project-mode="delete" aria-pressed="false">Supprimer</button></nav><div id="project-create" hidden><label>Nom du nouveau projet<input id="new-project-name" type="text" maxlength="80" placeholder="Mon prochain montage"></label><button id="new-project" class="btn">Créer le projet</button></div><div id="project-manage"><label>Nom du projet ouvert<input id="project-name" type="text" maxlength="80"></label><button id="rename-project" class="btn">Renommer</button></div><p id="project-status" role="status"></p><div id="project-list"></div><p class="keyboard-help" style="font-size:.72rem;text-align:center;opacity:.75">Clavier : Espace · lecture/pause &nbsp; ← → · une image &nbsp; Maj + ← → · 1 seconde &nbsp; Retour arrière / Suppr · supprimer le clip</p><p>Chaque projet conserve ses médias et son historique. Les préréglages restent communs à vos projets sur ce navigateur.</p></section><section id="crop-settings" hidden><p>Glissez les bords ou les coins pour rogner. Glissez au milieu pour déplacer le cadre. L’image source est affichée sans sa rotation pour faciliter le réglage.</p><div id="crop-preview"><div id="crop-surface"><canvas id="crop-canvas"></canvas><svg viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true"><path id="crop-shade" fill-rule="evenodd"/></svg><div id="crop-box"><i></i><i></i></div></div></div><div class="animation-row"><label>Proportions<select id="crop-ratio"><option value="free">Libre</option><option value="original">Originales</option><option value="1:1">Carré · 1:1</option><option value="9:16">Vertical · 9:16</option><option value="16:9">Paysage · 16:9</option><option value="4:5">Portrait · 4:5</option></select></label><button id="crop-reset" class="btn">Réinitialiser</button></div><div id="crop-controls"></div><p id="crop-size" role="status"></p><p>Rognage non destructif : position, zoom et rotation restent conservés. Les préréglages mémorisent aussi ces proportions.</p></section><div id="preset-settings" hidden><p>Enregistrez la pose, le rognage, les animations, le volume et le décalage du calque sélectionné. Les temps des keyframes et des animations s’adaptent à la durée du prochain clip.</p><label>Nom du préréglage<input id="preset-name" type="text" maxlength="80" placeholder="Mon zoom portrait"></label><button id="save-preset" class="btn">Enregistrer le calque actuel</button><label>Mes préréglages<select id="preset-list"></select></label><div class="animation-row"><button id="apply-preset" class="btn">Appliquer au calque</button><button id="rename-preset" class="btn">Renommer</button></div><p id="preset-status" role="status"></p></div>
 <section id="autocut-settings" hidden><p>Conserve la dernière prise sonore de chaque clip. Une marge de fin protège les syllabes finales.</p><label>Marge de fin (secondes)<input id="autocut-padding" type="number" min="0" max="2" step="0.05" value="0.15"></label><button id="autocut-all" class="btn">AutoCut · tous les clips de L0</button><p id="autocut-status" role="status"></p></section><div id="session-loading" role="status">Ouverture du projet local…</div>
-<script src="clip-actions.js?v=220"></script><script src="track-tools.js?v=220"></script><script src="media-visuals.js?v=220"></script><script src="montage-tools.js?v=220"></script><script src="workspace-snap.js?v=220"></script><script src="preview-audio.js?v=222"></script><script src="blades.js?v=220"></script><script src="editor-tools.js?v=220"></script><script src="local-db.js?v=220"></script><script src="media-storage.js?v=220"></script><script src="timeline-navigation.js?v=220"></script><script src="session.js?v=220"></script><script src="projects.js?v=220"></script><script src="scenes.js?v=220"></script><script src="scene-editor.js?v=220"></script><script src="take-speech-worker.js?v=220"></script><script src="take-recognition.js?v=220"></script><script src="safe-autocut.js?v=220"></script><script src="keyboard.js?v=220"></script><script src="project-files.js?v=220"></script><script src="object-remover.js?v=220"></script></body>
+<script src="clip-actions.js?v=220"></script><script src="track-tools.js?v=220"></script><script src="media-visuals.js?v=220"></script><script src="montage-tools.js?v=220"></script><script src="workspace-snap.js?v=220"></script><script src="preview-audio.js?v=222"></script><script src="blades.js?v=220"></script><script src="editor-tools.js?v=220"></script><script src="local-db.js?v=220"></script><script src="media-storage.js?v=220"></script><script src="timeline-navigation.js?v=220"></script><script src="session.js?v=220"></script><script src="projects.js?v=220"></script><script src="scenes.js?v=226"></script><script src="scene-editor.js?v=226"></script><script src="take-speech-worker.js?v=220"></script><script src="take-recognition.js?v=220"></script><script src="safe-autocut.js?v=220"></script><script src="keyboard.js?v=220"></script><script src="project-files.js?v=220"></script><script src="object-remover.js?v=220"></script></body>
 </html>

@@ -83,10 +83,16 @@ const SceneEngine=(()=>{
   return targets;
  }
  function sourceTime(c,time){return c.freezeAt??(c.startTime+time-(c.timelineStart||0));}
+ function backgroundFrame(scene){
+  const media=state.mediaFiles.find(m=>m.id===scene.visualMediaId);
+  const w=workspaceWidth(),h=workspaceHeight(),rect=scene.mode==='split'?{x:0,y:h*(scene.faceHeight??.30),width:w,height:h*(1-(scene.faceHeight??.30))}:{x:0,y:0,width:w,height:h};
+  const pose=cover(media,rect,scene.bgX,scene.bgY),zoom=Math.max(.1,Math.min(5,(scene.bgZoom??100)/100));
+  applyPose(pose,{centerX:pose.x+pose.width/2+(scene.bgOffsetX||0)*rect.width,centerY:pose.y+pose.height/2+(scene.bgOffsetY||0)*rect.height,scale:zoom,rotation:0});
+  return {rect,pose};
+ }
  function background(c,run,timeline){
   const scene=c.scene,media=state.mediaFiles.find(m=>m.id===scene.visualMediaId);if(!media)return [];
-  const w=workspaceWidth(),h=workspaceHeight(),rect=scene.mode==='split'?{x:0,y:h*(scene.faceHeight??.30),width:w,height:h*(1-(scene.faceHeight??.30))}:{x:0,y:0,width:w,height:h};
-  const pose=cover(media,rect,scene.bgX,scene.bgY),zoom=Math.max(.1,Math.min(5,(scene.bgZoom??100)/100));applyPose(pose,{centerX:pose.x+pose.width/2+(scene.bgOffsetX||0)*rect.width,centerY:pose.y+pose.height/2+(scene.bgOffsetY||0)*rect.height,scale:zoom,rotation:0});const base={...pose,mediaId:media.id,type:media.type,trackIndex:1,zIndex:(c.zIndex||0)-.5,muted:!scene.visualAudio,volume:scene.visualVolume??1,sceneOwner:c.id,viewRect:rect,crop:{},keyframes:[],autoZoom:{enabled:!!scene.zoom,percent:scene.zoom},animationStart:run.start,animationDuration:run.end-run.start};
+  const {rect,pose}=backgroundFrame(scene);const base={...pose,mediaId:media.id,type:media.type,trackIndex:1,zIndex:(c.zIndex||0)-.5,muted:!scene.visualAudio,volume:scene.visualVolume??1,sceneOwner:c.id,viewRect:rect,crop:{},keyframes:[],autoZoom:{enabled:!!scene.zoom,percent:scene.zoom,focus:scene.zoomFocus},animationStart:run.start,animationDuration:run.end-run.start};
   // A replacement background follows the whole scene clock, across technical audio cuts.
   const at=c.timelineStart||0,span=duration(c),offset=scene.visualSourceOffset??(at-run.start);
   if(media.type==='image')return [{...base,id:c.id+'~fond',startTime:0,endTime:span,timelineStart:at}];
@@ -136,7 +142,7 @@ const SceneEngine=(()=>{
   const from=Math.min(...targets.map(c=>c.timelineStart||0)),to=Math.max(...targets.map(end));
   for(const c of targets){const old=c.scene;if(!old)continue;c.scene={...old,...structuredClone(record.settings)};layoutSubject(c,c.scene);applyClipPreset(record.subject,c,{start:from,duration:to-from});c.scene.originalPose=old.originalPose;c.scene.popup=c.popUp?.duration||c.scene.popup;}
  }
- return {defaults,upgrade,runs,subjectRuns,rangeFor,cover,apply,expand,sourceTime,composition,applyComposition,duration,end};
+ return {defaults,upgrade,runs,subjectRuns,rangeFor,cover,backgroundFrame,apply,expand,sourceTime,composition,applyComposition,duration,end};
 })();
 window.SceneEngine=SceneEngine;
 window.syncSceneEdits=()=>{
