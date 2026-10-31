@@ -4,7 +4,7 @@ const SceneEngine=(()=>{
  const duration=c=>Math.max(0,c.endTime-c.startTime);
  const end=c=>(c.timelineStart||0)+duration(c);
  const uid=prefix=>prefix+'_'+crypto.randomUUID();
- const defaults={placementVersion:2,mode:'pip',layout:'right',zoomFrom:0,zoom:35,faceY:.47,faceHeight:.30,popup:.25,popupEnabled:true,visualAudio:false,narrationAudio:true,shortVideo:'freeze',bgX:.5,bgY:.5,bgOffsetX:0,bgOffsetY:0,bgZoom:100};
+ const defaults={placementVersion:2,mode:'pip',layout:'right',zoomFrom:0,zoom:35,zoomFocus:null,faceY:.47,faceHeight:.30,popup:.25,popupEnabled:true,visualAudio:false,narrationAudio:true,shortVideo:'freeze',bgX:.5,bgY:.5,bgOffsetX:0,bgOffsetY:0,bgZoom:100};
  function runs(timeline){
   const result=[];
   for(const c of [...timeline].sort((a,b)=>clipTrack(a)-clipTrack(b)||(a.timelineStart||0)-(b.timelineStart||0))){
@@ -85,7 +85,7 @@ const SceneEngine=(()=>{
  function previousBackground(from,track=0){
   const previous=state.timeline.filter(c=>clipTrack(c)===track&&end(c)<=from+.001).sort((a,b)=>end(b)-end(a))[0];
   if(!previous?.scene)throw Error('Le clip précédent ne possède pas de fond illustré.');
-  const run=runs(state.timeline).find(r=>r.clips.includes(previous)),s=previous.scene;
+  const run=runs(state.timeline).find(r=>r.clips.includes(previous)),s={...defaults,...previous.scene};
   const progress=Math.max(0,Math.min(1,(end(previous)-run.start)/(run.end-run.start)));
   const zoomFrom=(s.zoomFrom||0)+((s.zoom||0)-(s.zoomFrom||0))*progress;
   return Object.assign(Object.fromEntries(['visualMediaId','bgX','bgY','bgOffsetX','bgOffsetY','bgZoom','zoomFocus','shortVideo','visualAudio'].filter(k=>s[k]!==undefined).map(k=>[k,structuredClone(s[k])])),{zoomFrom,backgroundSourceStart:(s.visualSourceOffset??((previous.timelineStart||0)-run.start))+duration(previous)});
