@@ -101,8 +101,7 @@ document.addEventListener('DOMContentLoaded',()=>{
    pausePlayback();for(const x of members(c))x.volume=value/100;
    byId('clip-volume-number').value=value;byId('clip-volume').value=value;commit();
  };
- byId('audio-offset-btn').onclick=()=>{const c=requireClip();if(!c)return;byId('clip-audio-offset').value=c.audioOffset||0;open('Décalage du son',[byId('offset-settings')]);};
- byId('clip-audio-offset').oninput=()=>{const c=requireClip(),value=Number(byId('clip-audio-offset').value);if(!c||!Number.isFinite(value))return;pausePlayback();for(const x of members(c))x.audioOffset=value;commit();};
+ byId('audio-offset-btn').onclick=()=>window.openAudioAlignment?.();
  byId('quality-btn').onclick=()=>open('Qualité d’export',[document.querySelector('.export-settings')]);
  byId('workspace-btn').onclick=()=>open('Format de la zone de travail',[byId('workspace-settings')]);
  byId('workspace-format').onchange=()=>{

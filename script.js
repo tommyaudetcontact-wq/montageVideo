@@ -450,11 +450,11 @@ function renderTimeline() {
       canvasWave.width = Math.max(1,Math.min(2048,Math.ceil(clipWidth)));
       canvasWave.height = 20;
       if (members.some(c=>{const m=state.mediaFiles.find(x=>x.id===c.mediaId);return m&&(m.audioBuffer||m.waveformPreview);})) {
-        if(!sequence)drawWaveform(canvasWave, media.audioBuffer||media.waveformPreview, clip.startTime, clip.endTime);
+        if(!sequence)drawWaveform(canvasWave, media.audioBuffer||media.waveformPreview, clip.startTime, clip.endTime,clip.audioOffset||0);
         else for(const member of members){
           const m=state.mediaFiles.find(x=>x.id===member.mediaId);if(!m?.audioBuffer&&!m?.waveformPreview)continue;
           const part=document.createElement('canvas');part.width=Math.max(1,Math.min(2048,Math.round((member.endTime-member.startTime)*PIXELS_PER_SECOND)));part.height=20;
-          drawWaveform(part,m.audioBuffer||m.waveformPreview,member.startTime,member.endTime);canvasWave.getContext('2d').drawImage(part,(member.timelineStart-clip.timelineStart)*PIXELS_PER_SECOND*canvasWave.width/Math.max(1,clipWidth),0,(member.endTime-member.startTime)*PIXELS_PER_SECOND*canvasWave.width/Math.max(1,clipWidth),20);
+          drawWaveform(part,m.audioBuffer||m.waveformPreview,member.startTime,member.endTime,member.audioOffset||0);canvasWave.getContext('2d').drawImage(part,(member.timelineStart-clip.timelineStart)*PIXELS_PER_SECOND*canvasWave.width/Math.max(1,clipWidth),0,(member.endTime-member.startTime)*PIXELS_PER_SECOND*canvasWave.width/Math.max(1,clipWidth),20);
         }
       }
 
@@ -806,7 +806,7 @@ function addMediaToTimeline(mediaId,asPip=false) {
   pushState();
 }
 
-function drawWaveform(canvas, audioBuffer, startTime, endTime) {
+function drawWaveform(canvas, audioBuffer, startTime, endTime, audioOffset=0) {
   if (!audioBuffer) return;
   const ctx = canvas.getContext('2d');
   const width = canvas.width;
@@ -823,8 +823,9 @@ function drawWaveform(canvas, audioBuffer, startTime, endTime) {
   for (let i = 0; i < width; i++) {
     let min = 0;
     let max = 0;
-    const first=Math.floor(startSample+i*totalSamples/width),last=Math.max(first+1,Math.floor(startSample+(i+1)*totalSamples/width));
-    for (let j = Math.max(0,first); j < Math.min(channelData.length,last); j++) {
+    const shift=audioOffset*sampleRate,first=Math.floor(startSample+i*totalSamples/width-shift),last=Math.max(first+1,Math.floor(startSample+(i+1)*totalSamples/width-shift));
+    if(last<=startSample||first>=endSample)continue;
+    for (let j = Math.max(0,startSample,first); j < Math.min(channelData.length,endSample,last); j++) {
       const sample = channelData[j];
       if (sample < min) min = sample;
       if (sample > max) max = sample;
