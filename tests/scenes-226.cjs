@@ -25,3 +25,14 @@ ctx.SceneEngine.apply(0,4,{mode:'pip',visualMediaId:'background-video',zoom:35,z
 ctx.SceneEngine.apply(4,8,{...follow,mode:'pip',zoom:70,popupEnabled:false});const expanded=ctx.SceneEngine.expand(ctx.state.timeline),bg1=expanded.find(c=>c.sceneOwner==='first'),bg2=expanded.find(c=>c.sceneOwner==='second');assert.equal(bg2.startTime,6);assert.equal(second.scene.backgroundSourceStart,undefined,'transient editor offset must not leak into saved settings');const endPose=ctx.animatedClip(bg1,4),nextPose=ctx.animatedClip(bg2,4);for(const k of ['x','y','width','height'])assert.ok(Math.abs(endPose[k]-nextPose[k])<1e-6,'continuous background '+k);assert.equal(ctx.animatedClip(bg2,8).width/bg2.width,1.7);assert.equal(second.popUp.enabled,false);assert.throws(()=>ctx.SceneEngine.previousBackground(0));console.log('PASS: previous background, exact zoom/framing/focus continuity, video source continuity, independent next scene and missing predecessor.');
 
 delete first.scene.zoomFocus;delete first.scene.bgOffsetX;assert.equal(ctx.SceneEngine.previousBackground(4).zoomFocus,null);assert.equal(ctx.SceneEngine.previousBackground(4).bgOffsetX,0,'legacy centered background clears current custom framing');
+
+// Pan bounds cover every edge, including split screens and an off-screen inherited focus.
+ctx.state.timeline=[];
+for(const mode of ['pip','split'])for(const bgZoom of [100,150,350]){
+ let cfg={...ctx.SceneEngine.defaults,mode,visualMediaId:'photo',bgZoom,zoom:35,zoomFocus:{x:0,y:0}};
+ for(const [dx,dy] of [[-1e5,-1e5],[1e5,1e5],[-1e5,1e5],[1e5,-1e5]]){
+  cfg=ctx.SceneEngine.panBackground(cfg,dx,dy);const {pose,rect}=ctx.SceneEngine.backgroundFrame(cfg);assert(pose.x<=rect.x+1e-7);assert(pose.y<=rect.y+1e-7);assert(pose.x+pose.width>=rect.x+rect.width-1e-7);assert(pose.y+pose.height>=rect.y+rect.height-1e-7);
+  const c={id:'bounded',mediaId:'voice',type:'video',startTime:0,endTime:4,timelineStart:0,scene:{...cfg,id:'bounded'}};ctx.state.timeline=[c];const bg=ctx.SceneEngine.expand([c]).find(x=>x.sceneOwner===c.id);for(const t of [0,2,4]){const p=ctx.animatedClip(bg,t);assert(p.x<=rect.x+1e-7&&p.y<=rect.y+1e-7);assert(p.x+p.width>=rect.x+rect.width-1e-7&&p.y+p.height>=rect.y+rect.height-1e-7);}
+ }
+}
+let inherited=ctx.SceneEngine.panBackground({...ctx.SceneEngine.defaults,visualMediaId:'photo',bgZoom:150,bgOffsetX:5,bgOffsetY:5},-50,-50);let inheritedFrame=ctx.SceneEngine.backgroundFrame(inherited);const moved=ctx.SceneEngine.panBackground(inherited,-50,-50),movedFrame=ctx.SceneEngine.backgroundFrame(moved);assert(movedFrame.pose.x<inheritedFrame.pose.x,'drag can recover from legacy out-of-bounds offsets');console.log('PASS: pan stops at all four bounds, zoom stays filled, split/full frame, legacy extreme offsets.');

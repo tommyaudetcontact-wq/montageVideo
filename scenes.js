@@ -4,7 +4,7 @@ const SceneEngine=(()=>{
  const duration=c=>Math.max(0,c.endTime-c.startTime);
  const end=c=>(c.timelineStart||0)+duration(c);
  const uid=prefix=>prefix+'_'+crypto.randomUUID();
- const defaults={placementVersion:2,mode:'pip',layout:'right',zoomFrom:0,zoom:35,zoomFocus:null,faceY:.47,faceHeight:.30,popup:.25,popupEnabled:true,visualAudio:false,narrationAudio:true,shortVideo:'freeze',bgX:.5,bgY:.5,bgOffsetX:0,bgOffsetY:0,bgZoom:100};
+ const defaults={placementVersion:2,mode:'pip',layout:'right',zoomFrom:0,zoom:35,zoomFocus:null,lockBackgroundBounds:false,faceY:.47,faceHeight:.30,popup:.25,popupEnabled:true,visualAudio:false,narrationAudio:true,shortVideo:'freeze',bgX:.5,bgY:.5,bgOffsetX:0,bgOffsetY:0,bgZoom:100};
  function runs(timeline){
   const result=[];
   for(const c of [...timeline].sort((a,b)=>clipTrack(a)-clipTrack(b)||(a.timelineStart||0)-(b.timelineStart||0))){
@@ -88,19 +88,29 @@ const SceneEngine=(()=>{
   const run=runs(state.timeline).find(r=>r.clips.includes(previous)),s={...defaults,...previous.scene};
   const progress=Math.max(0,Math.min(1,(end(previous)-run.start)/(run.end-run.start)));
   const zoomFrom=(s.zoomFrom||0)+((s.zoom||0)-(s.zoomFrom||0))*progress;
-  return Object.assign(Object.fromEntries(['visualMediaId','bgX','bgY','bgOffsetX','bgOffsetY','bgZoom','zoomFocus','shortVideo','visualAudio'].filter(k=>s[k]!==undefined).map(k=>[k,structuredClone(s[k])])),{zoomFrom,backgroundSourceStart:(s.visualSourceOffset??((previous.timelineStart||0)-run.start))+duration(previous)});
+  return Object.assign(Object.fromEntries(['lockBackgroundBounds','visualMediaId','bgX','bgY','bgOffsetX','bgOffsetY','bgZoom','zoomFocus','shortVideo','visualAudio'].filter(k=>s[k]!==undefined).map(k=>[k,structuredClone(s[k])])),{zoomFrom,backgroundSourceStart:(s.visualSourceOffset??((previous.timelineStart||0)-run.start))+duration(previous)});
  }
  function sourceTime(c,time){return c.freezeAt??(c.startTime+time-(c.timelineStart||0));}
  function backgroundFrame(scene){
   const media=state.mediaFiles.find(m=>m.id===scene.visualMediaId);
   const w=workspaceWidth(),h=workspaceHeight(),rect=scene.mode==='split'?{x:0,y:h*(scene.faceHeight??.30),width:w,height:h*(1-(scene.faceHeight??.30))}:{x:0,y:0,width:w,height:h};
-  const pose=cover(media,rect,scene.bgX,scene.bgY),zoom=Math.max(.1,Math.min(5,(scene.bgZoom??100)/100));
+  const pose=cover(media,rect,scene.bgX,scene.bgY),zoom=Math.max(scene.lockBackgroundBounds?1:.1,Math.min(5,(scene.bgZoom??100)/100));
   applyPose(pose,{centerX:pose.x+pose.width/2+(scene.bgOffsetX||0)*rect.width,centerY:pose.y+pose.height/2+(scene.bgOffsetY||0)*rect.height,scale:zoom,rotation:0});
+  if(scene.lockBackgroundBounds){pose.x=Math.max(rect.x+rect.width-pose.width,Math.min(rect.x,pose.x));pose.y=Math.max(rect.y+rect.height-pose.height,Math.min(rect.y,pose.y));}
   return {rect,pose};
+ }
+ function boundedFocus(focus,rect,pose){
+  return {x:Math.max((rect.x-pose.x)/pose.width,Math.min((rect.x+rect.width-pose.x)/pose.width,focus?.x??(rect.x+rect.width/2-pose.x)/pose.width)),y:Math.max((rect.y-pose.y)/pose.height,Math.min((rect.y+rect.height-pose.y)/pose.height,focus?.y??(rect.y+rect.height/2-pose.y)/pose.height))};
+ }
+ function panBackground(settings,dx,dy){
+  const scene={...settings,lockBackgroundBounds:true,bgZoom:Math.max(100,settings.bgZoom||100)},frame=backgroundFrame(scene),{rect,pose}=frame;
+  const x=Math.max(rect.x+rect.width-pose.width,Math.min(rect.x,pose.x+dx)),y=Math.max(rect.y+rect.height-pose.height,Math.min(rect.y,pose.y+dy));
+  const neutral=backgroundFrame({...scene,lockBackgroundBounds:false,bgOffsetX:0,bgOffsetY:0}).pose;scene.bgOffsetX=(x-neutral.x)/rect.width;scene.bgOffsetY=(y-neutral.y)/rect.height;
+  if(scene.zoomFocus)scene.zoomFocus=boundedFocus(scene.zoomFocus,rect,{...pose,x,y});return scene;
  }
  function background(c,run,timeline){
   const scene=c.scene,media=state.mediaFiles.find(m=>m.id===scene.visualMediaId);if(!media)return [];
-  const {rect,pose}=backgroundFrame(scene);const base={...pose,mediaId:media.id,type:media.type,trackIndex:1,zIndex:(c.zIndex||0)-.5,muted:!scene.visualAudio,volume:scene.visualVolume??1,sceneOwner:c.id,viewRect:rect,crop:{},keyframes:[],autoZoom:{enabled:!!scene.zoom||!!scene.zoomFrom,from:scene.zoomFrom??0,percent:scene.zoom,focus:scene.zoomFocus},animationStart:run.start,animationDuration:run.end-run.start};
+  const {rect,pose}=backgroundFrame(scene);const base={...pose,mediaId:media.id,type:media.type,trackIndex:1,zIndex:(c.zIndex||0)-.5,muted:!scene.visualAudio,volume:scene.visualVolume??1,sceneOwner:c.id,viewRect:rect,crop:{},keyframes:[],autoZoom:{enabled:!!scene.zoom||!!scene.zoomFrom,from:scene.zoomFrom??0,percent:scene.zoom,focus:scene.lockBackgroundBounds?boundedFocus(scene.zoomFocus,rect,pose):scene.zoomFocus},animationStart:run.start,animationDuration:run.end-run.start};
   // A replacement background follows the whole scene clock, across technical audio cuts.
   const at=c.timelineStart||0,span=duration(c),offset=scene.visualSourceOffset??(at-run.start);
   if(media.type==='image')return [{...base,id:c.id+'~fond',startTime:0,endTime:span,timelineStart:at}];
@@ -150,7 +160,7 @@ const SceneEngine=(()=>{
   const from=Math.min(...targets.map(c=>c.timelineStart||0)),to=Math.max(...targets.map(end));
   for(const c of targets){const old=c.scene;if(!old)continue;c.scene={...old,...structuredClone(record.settings)};layoutSubject(c,c.scene);applyClipPreset(record.subject,c,{start:from,duration:to-from});c.scene.originalPose=old.originalPose;if(c.popUp)c.popUp.enabled=c.scene.mode==='pip'&&c.scene.popupEnabled!==false;c.scene.popup=c.popUp?.duration||c.scene.popup;}
  }
- return {defaults,upgrade,runs,subjectRuns,rangeFor,cover,backgroundFrame,previousBackground,apply,expand,sourceTime,composition,applyComposition,duration,end};
+ return {defaults,upgrade,runs,subjectRuns,rangeFor,cover,backgroundFrame,panBackground,previousBackground,apply,expand,sourceTime,composition,applyComposition,duration,end};
 })();
 window.SceneEngine=SceneEngine;
 window.syncSceneEdits=()=>{
