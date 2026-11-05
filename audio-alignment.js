@@ -1,10 +1,10 @@
 'use strict';
-// Audio offsets use the same sign and trimmed-source bounds as preview/export.
+// Audio offsets use the same sign and full source bounds as preview/export.
 const AudioAlignmentMath={
  clamp:(v,d)=>Math.max(-d,Math.min(d,Math.round(v*1000)/1000)),
  fromDrag:(initial,delta,pixelsPerSecond,duration)=>AudioAlignmentMath.clamp(initial+delta/pixelsPerSecond,duration),
  sourceTime:(clip,local,offset)=>clip.startTime+local-offset,
- audible:(clip,local,offset)=>local>=0&&local<clip.endTime-clip.startTime&&local-offset>=0&&local-offset<clip.endTime-clip.startTime
+ audible:(clip,local,offset,sourceDuration=Infinity)=>local>=0&&local<clip.endTime-clip.startTime&&AudioAlignmentMath.sourceTime(clip,local,offset)>=0&&AudioAlignmentMath.sourceTime(clip,local,offset)<sourceDuration
 };
 window.AudioAlignmentMath=AudioAlignmentMath;
 document.addEventListener('DOMContentLoaded',()=>{
@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   const data=(media.waveformPreview||media.audioBuffer)?.getChannelData(0),rate=media.waveformPreview?.sampleRate||media.audioBuffer?.sampleRate,raw=!media.waveformPreview;
   ctx.strokeStyle='#69ffe1';ctx.beginPath();
   for(let x=0;x<w;x++){
-   const t=x/pps,at=AudioAlignmentMath.sourceTime(clip,t,draft);if(!AudioAlignmentMath.audible(clip,t,draft))continue;
+   const t=x/pps,at=AudioAlignmentMath.sourceTime(clip,t,draft);if(!AudioAlignmentMath.audible(clip,t,draft,media.duration||media.element?.duration||Infinity))continue;
    let lo=0,hi=0;
    if(fine&&at>=fine.start&&at<fine.end){const a=fine.buffer.getChannelData(0),start=Math.max(0,Math.floor((at-fine.start)*fine.buffer.sampleRate)),end=Math.min(a.length,Math.ceil((at-fine.start+1/pps)*fine.buffer.sampleRate));for(let n=start;n<end;n+=Math.max(1,Math.floor((end-start)/40))){lo=Math.min(lo,a[n]);hi=Math.max(hi,a[n]);}}
    else if(data){if(raw){const start=Math.floor(at*rate),end=Math.min(data.length,Math.ceil((at+1/pps)*rate));for(let n=start;n<end;n+=Math.max(1,Math.floor((end-start)/30))){lo=Math.min(lo,data[n]);hi=Math.max(hi,data[n]);}}else{const start=Math.max(0,Math.floor(at*rate/2)*2),end=Math.min(data.length,Math.ceil((at+1/pps)*rate/2)*2+2);for(let n=start;n<end;n+=2){lo=Math.min(lo,data[n]);hi=Math.max(hi,data[n+1]||0);}}}
@@ -46,7 +46,7 @@ document.addEventListener('DOMContentLoaded',()=>{
  }
  function repaint(){if(!drawFrame)drawFrame=requestAnimationFrame(paint);}
  function resize(){if(!duration)return;const old=pps;pps=Math.min(12000,Math.max(320,scroll.clientWidth)*zoom)/duration;canvas.width=Math.ceil(duration*pps);canvas.height=180;el('audio-align-surface').style.width=canvas.width+'px';scroll.scrollLeft=local*pps-(local*old-scroll.scrollLeft);el('audio-align-zoom-label').value='×'+zoom;paint();}
- function value(v){if(!Number.isFinite(v))return;stop();draft=AudioAlignmentMath.clamp(v,duration);el('audio-align-offset').value=Math.round(draft*1000);el('audio-align-direction').value=draft===0?'Son synchronisé avec l’image':draft>0?'Son retardé de '+Math.round(draft*1000)+' ms':'Son avancé de '+Math.round(-draft*1000)+' ms';repaint();}
+ function value(v){if(!Number.isFinite(v))return;stop();draft=AudioAlignmentMath.clamp(v,media.duration||media.element?.duration||duration);el('audio-align-offset').value=Math.round(draft*1000);el('audio-align-direction').value=draft===0?'Son synchronisé avec l’image':draft>0?'Son retardé de '+Math.round(draft*1000)+' ms':'Son avancé de '+Math.round(-draft*1000)+' ms';repaint();}
  async function seek(t){stop();local=Math.max(0,Math.min(duration-.001,t));cursor();try{await seekVideo(video,clip.startTime+local);}catch(e){status(e.message);}}
  async function decode(start,end,token){
   if(media.audioBuffer)return {buffer:media.audioBuffer,start:media.audioBufferStart||0,end:(media.audioBufferStart||0)+media.audioBuffer.duration};
@@ -62,11 +62,11 @@ document.addEventListener('DOMContentLoaded',()=>{
  }
  async function play(){
   if(playing){stop();return;}stop();const token=request;if(local>=duration-.02)local=0;
-  const begin=local,end=Math.min(duration,begin+10),audioBegin=Math.max(begin,draft),sourceStart=clip.startTime+audioBegin-draft,sourceEnd=Math.min(clip.endTime,clip.startTime+end-draft);
+  const begin=local,end=Math.min(duration,begin+10),audioBegin=Math.max(begin,draft-clip.startTime),sourceStart=clip.startTime+audioBegin-draft,sourceEnd=Math.min(media.duration||media.element?.duration||Infinity,clip.startTime+end-draft);
   el('audio-align-play').disabled=true;status('Préparation de la préécoute…');
   try{
    await waitForPreviewData(video);if(token!==request||!dialog.open)return;await seekVideo(video,clip.startTime+begin);
-   let sound=null;if(audioBegin<end&&sourceEnd>sourceStart)sound=await decode(Math.max(clip.startTime,sourceStart),sourceEnd,token);
+   let sound=null;if(audioBegin<end&&sourceEnd>sourceStart)sound=await decode(Math.max(0,sourceStart),sourceEnd,token);
    if(token!==request||!dialog.open)return;const ctx=getAudioContext();await ctx.resume();if(token!==request||!dialog.open)return;
    if(sound){fine=sound;repaint();source=ctx.createBufferSource();gain=ctx.createGain();source.buffer=sound.buffer;gain.gain.value=clip.muted?0:(clip.volume??1);source.connect(gain);gain.connect(ctx.destination);}
    // Await image playback readiness before starting the independent sound clock.
@@ -77,7 +77,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   }catch(e){if(token===request){stop();status('Préécoute : '+e.message);}}finally{el('audio-align-play').disabled=false;}
  }
  canvas.addEventListener('pointerdown',e=>{if(e.button!==0)return;const r=canvas.getBoundingClientRect();if(e.clientY-r.top<100){seek((e.clientX-r.left)/pps);return;}stop();drag={id:e.pointerId,x:e.clientX,offset:draft,scroll:scroll.scrollLeft};canvas.setPointerCapture(e.pointerId);e.preventDefault();});
- canvas.addEventListener('pointermove',e=>{if(drag?.id!==e.pointerId)return;value(AudioAlignmentMath.fromDrag(drag.offset,e.clientX-drag.x+scroll.scrollLeft-drag.scroll,pps,duration));});
+ canvas.addEventListener('pointermove',e=>{if(drag?.id!==e.pointerId)return;value(AudioAlignmentMath.fromDrag(drag.offset,e.clientX-drag.x+scroll.scrollLeft-drag.scroll,pps,media.duration||media.element?.duration||duration));});
  for(const event of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(event,()=>{drag=null;});
  el('audio-align-zoom').oninput=e=>{zoom=Number(e.target.value);resize();};el('audio-align-pan').oninput=e=>{scroll.scrollLeft=Number(e.target.value)*(canvas.width-scroll.clientWidth);};
  el('audio-align-seek').oninput=e=>seek(Number(e.target.value));el('audio-align-offset').oninput=e=>{if(e.target.value.trim()!=='')value(Number(e.target.value)/1000);};
@@ -89,9 +89,9 @@ document.addEventListener('DOMContentLoaded',()=>{
  window.openAudioAlignment=async()=>{
   const c=state.timeline.find(c=>c.id===state.activeClipId),m=c&&state.mediaFiles.find(m=>m.id===c.mediaId);
   if(!c||c.type!=='video'||!m||c.freezeAt!==undefined)return showToast('Sélectionnez un clip vidéo avec du son.');
-  pausePlayback();cleanup();clip=c;media=m;duration=c.endTime-c.startTime;if(duration<=0)return;local=0;zoom=1;el('audio-align-zoom').value=1;el('audio-align-pan').value=0;el('audio-align-seek').max=duration;el('audio-align-offset').min=-Math.round(duration*1000);el('audio-align-offset').max=Math.round(duration*1000);el('audio-align-name').textContent=c.label||m.file?.name||'Clip sélectionné';
+  pausePlayback();cleanup();clip=c;media=m;duration=c.endTime-c.startTime;if(duration<=0)return;local=0;zoom=1;el('audio-align-zoom').value=1;el('audio-align-pan').value=0;el('audio-align-seek').max=duration;el('audio-align-offset').min=-Math.round((m.duration||m.element?.duration||duration)*1000);el('audio-align-offset').max=Math.round((m.duration||m.element?.duration||duration)*1000);el('audio-align-name').textContent=c.label||m.file?.name||'Clip sélectionné';
   for(const url of m.thumbnails||[]){const image=new Image();image.onload=repaint;image.src=url;thumbImages.push(image);}
-  video.src=m.url;dialog.showModal();value(c.audioOffset||0);resize();status('Le déplacement reste à l’intérieur du clip. Annuler conserve le réglage précédent.');
+  video.src=m.url;dialog.showModal();value(c.audioOffset||0);resize();status('Le son avant et après la coupe est récupéré dans la vidéo source. Annuler conserve le réglage précédent.');
   const token=request;try{await waitForPreviewData(video);if(token===request&&dialog.open)await seekVideo(video,c.startTime);}catch(e){if(dialog.open)status(e.message);}
  };
  el('audio-offset-btn').onclick=()=>window.openAudioAlignment();

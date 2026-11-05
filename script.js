@@ -824,8 +824,8 @@ function drawWaveform(canvas, audioBuffer, startTime, endTime, audioOffset=0) {
     let min = 0;
     let max = 0;
     const shift=audioOffset*sampleRate,first=Math.floor(startSample+i*totalSamples/width-shift),last=Math.max(first+1,Math.floor(startSample+(i+1)*totalSamples/width-shift));
-    if(last<=startSample||first>=endSample)continue;
-    for (let j = Math.max(0,startSample,first); j < Math.min(channelData.length,endSample,last); j++) {
+    if(last<=0||first>=channelData.length)continue;
+    for (let j = Math.max(0,first); j < Math.min(channelData.length,last); j++) {
       const sample = channelData[j];
       if (sample < min) min = sample;
       if (sample > max) max = sample;

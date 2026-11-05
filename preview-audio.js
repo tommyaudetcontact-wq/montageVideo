@@ -44,7 +44,7 @@ function waitPreviewAudio(item,target,valid){
 }
 async function preparePreviewAudioClip(clip,time,valid){
  const media=state.mediaFiles.find(m=>m.id===clip.mediaId);if(!media||!await previewMediaHasAudio(media)||!valid())return null;
- const item=previewAudioItem(clip,media),target=Math.max(clip.startTime,Math.min(clip.endTime-.00001,previewAudioTime(clip,time)));
+ const item=previewAudioItem(clip,media),target=Math.max(0,Math.min((media.duration||media.element?.duration||Infinity)-.00001,previewAudioTime(clip,time)));
  if(item.preparing)try{await item.preparing;}catch(e){if(e.name!=='AbortError'||!valid())throw e;}
  if(!valid())return null;
  if(!item.preparing){const job=waitPreviewAudio(item,target,valid);item.preparing=job;job.finally(()=>{if(item.preparing===job)item.preparing=null;}).catch(()=>{});}
@@ -63,7 +63,7 @@ async function playPreviewAudio(item,valid){
 }
 async function startPreviewAudio(clips,time,valid=()=>true){
  await Promise.all(clips.filter(c=>c.type==='video'&&!c.muted).map(c=>{
-  const at=previewAudioTime(c,time),item=previewAudioPlayers.get(c.id);return item&&at>=c.startTime&&at<c.endTime?playPreviewAudio(item,valid):null;
+  const at=previewAudioTime(c,time),item=previewAudioPlayers.get(c.id);const media=state.mediaFiles.find(m=>m.id===c.mediaId);return item&&at>=0&&at<(media?.duration||media?.element?.duration||Infinity)?playPreviewAudio(item,valid):null;
  }));
 }
 function prefetchPreviewAudio(time,wanted){
@@ -81,7 +81,7 @@ function syncPreviewAudio(clips,time){
  for(const clip of clips){
   if(clip.type!=='video'||clip.muted)continue;
   const media=state.mediaFiles.find(m=>m.id===clip.mediaId),source=previewAudioTime(clip,time);
-  if(!media||media.audioAbsent||source<clip.startTime||source>=clip.endTime)continue;wanted.add(clip.id);
+  if(!media||media.audioAbsent||source<0||source>=(media.duration||media.element?.duration||Infinity))continue;wanted.add(clip.id);
   const item=previewAudioPlayers.get(clip.id);
   if(!item){preparePreviewAudioClip(clip,time,()=>state.isPlaying&&epoch===previewAudioEpoch).then(ready=>{if(ready&&state.isPlaying&&epoch===previewAudioEpoch)syncPreviewAudio(clips,state.currentTime);}).catch(e=>{if(e.name!=='AbortError')showToast(e.message);});continue;}
   item.gain.gain.value=clip.volume??1;

@@ -25,9 +25,9 @@ function startProjectAudio(time){
     const buffer=state.mediaFiles.find(m=>m.id===c.mediaId)?.audioBuffer;
     if(c.muted||!buffer||c.type!=='video')continue;
     const end=c.timelineStart+c.endTime-c.startTime;
-    let begin=Math.max(time,c.timelineStart,c.timelineStart+(c.audioOffset||0)),offset=c.startTime+begin-c.timelineStart-(c.audioOffset||0);
+    let begin=Math.max(time,c.timelineStart,c.timelineStart+(c.audioOffset||0)-c.startTime),offset=c.startTime+begin-c.timelineStart-(c.audioOffset||0);
     if(offset<0){begin-=offset;offset=0;}
-    const duration=Math.min(end-begin,Math.min(buffer.duration,c.endTime)-offset);if(duration<=0)continue;
+    const duration=Math.min(end-begin,buffer.duration-offset);if(duration<=0)continue;
     const source=ctx.createBufferSource(),gain=ctx.createGain();source.buffer=buffer;gain.gain.value=c.volume??1;
     source.connect(gain);gain.connect(ctx.destination);source.onended=()=>gain.disconnect();
     source.start(now+begin-time,offset,duration);projectAudioSources.push(source);

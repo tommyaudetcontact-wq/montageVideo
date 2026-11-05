@@ -189,9 +189,9 @@ function mixAudioBlock(clips,start,count) {
         const time=(start+i)/48000;
         if(time<c.timelineStart || time>=c.timelineStart+c.endTime-c.startTime) continue;
         const sourceTime=c.startTime+time-c.timelineStart-(c.audioOffset||0);
-        const pos=(sourceTime-(windowed?.start||state.mediaFiles.find(m=>m.id===c.mediaId).audioBufferStart||0))*buffer.sampleRate;
+        const pos=(sourceTime-(windowed?.start??state.mediaFiles.find(m=>m.id===c.mediaId).audioBufferStart??0))*buffer.sampleRate;
         const lo=Math.floor(pos),fraction=pos-lo;
-        if(sourceTime>=c.startTime&&sourceTime<c.endTime&&pos>=0&&pos<buffer.length)result[ch*count+i]+=((data[lo]||0)*(1-fraction)+(data[lo+1]||0)*fraction)*(c.volume??1);
+        if(sourceTime>=0&&pos>=0&&pos<buffer.length)result[ch*count+i]+=((data[lo]||0)*(1-fraction)+(data[lo+1]||0)*fraction)*(c.volume??1);
       }
     }
   }
@@ -201,7 +201,11 @@ function mixAudioBlock(clips,start,count) {
 
 async function prepareExportAudioWindow(clips,time,frameDuration,inputs,B){
  const needed=new Map();
- for(const c of clips){if(time+frameDuration<c.timelineStart||time>=c.timelineStart+c.endTime-c.startTime)continue;const source=c.startTime+Math.max(time,c.timelineStart)-c.timelineStart-(c.audioOffset||0);if(source<c.startTime||source>=c.endTime)continue;const range=needed.get(c.id)||{mediaId:c.mediaId,start:source,end:source+frameDuration};range.start=Math.min(range.start,source);range.end=Math.max(range.end,source+frameDuration);needed.set(c.id,range);}
+ for(const c of clips){if(time+frameDuration<c.timelineStart||time>=c.timelineStart+c.endTime-c.startTime)continue;
+  const media=state.mediaFiles.find(m=>m.id===c.mediaId),source=c.startTime+Math.max(time,c.timelineStart)-c.timelineStart-(c.audioOffset||0),limit=media?.duration||media?.element?.duration||Infinity;
+  if(source+frameDuration<=0||source>=limit)continue;
+  const lo=Math.max(0,source),hi=Math.min(limit,source+frameDuration),range=needed.get(c.id)||{mediaId:c.mediaId,start:lo,end:hi};range.start=Math.min(range.start,lo);range.end=Math.max(range.end,hi);needed.set(c.id,range);
+ }
  for(const id of exportAudioWindows.keys())if(!needed.has(id))exportAudioWindows.delete(id);
  for(const [id,range] of needed){const media=state.mediaFiles.find(m=>m.id===range.mediaId),windowed=exportAudioWindows.get(id),offset=windowed?.start||0;if(windowed&&offset<=range.start&&offset+windowed.buffer.duration>=range.end)continue;
    const item=inputs.get(range.mediaId),track=item.audioTrack;if(!await track.canDecode())throw Error('Audio non décodable : '+media.file.name);const first=await track.getFirstTimestamp(),start=Math.max(0,range.start-.05),end=Math.min(media.duration,Math.max(range.end,start+2));const parts=[];let rate=48000;
